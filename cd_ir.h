@@ -1,0 +1,166 @@
+
+#ifndef _CD_IR_H_
+#define _CD_IR_H_
+#pragma once
+
+
+uint8_t irTranslate(uint64_t val)
+{
+  uint8_t rv = 99;
+  if (val == ((0xffffffff | val) < 0xFFFF)) return rv;
+
+  switch (val) {
+
+    case 0xFFA25D:
+    case 0xE318261B:
+      rv = 10;
+      break;
+
+    case 0xFF629D:
+    case 0x511DBB:
+      rv = 11;
+      break;
+
+    case 0xFFE21D:
+    case 0xEE886D7F:
+      rv = 12;
+      break;
+
+    case 0xFF22DD:
+    case 0x52A3D41F:
+      rv = 13;
+      break;
+
+    case 0xFF02FD:
+    case 0xD7E84B1B:
+      rv = 14;
+      break;
+
+    case 0xFFC23D:
+    case 0x20FE4DBB:
+      rv = 15;
+      break;
+
+    case 0xFFE01F:
+    case 0xF076C13B:
+      rv = 16;
+      break;
+
+    case 0xFFA8570:
+    case 0xA3C8EDDB:
+      rv = 17;
+      break;
+
+    case 0xFF906F:
+    case 0xE5CFBD7F:
+      rv = 18;
+      break;
+
+    case 0xFF6897:
+    case 0xC101E57B:
+      rv = 0;
+      break;
+
+    case 0xFF9867:
+    case 0x97483BFB:
+      rv = 19;
+      break;
+
+    case 0xFFB04F:
+    case 0xF0C41643:
+      rv = 20;
+      break;
+
+    case 0xFF30CF:
+    case 0x9716BE3F:
+      rv = 1;
+      break;
+
+    case 0xFF18E7:
+    case 0x3D9AE3F7:
+      rv = 2;
+      break;
+
+    case 0xFF7A85:
+    case 0x6182021B:
+      rv = 3;
+      break;
+
+    case 0xFF10EF:
+    case 0x8C22657B:
+      rv = 4;
+      break;
+
+    case 0xFF38C7:
+    case 0x488F3CBB:
+      rv = 5;
+      break;
+
+    case 0xFF5AA5:
+    case 0x449E79F:
+      rv = 6;
+      break;
+
+    case 0xFF42BD:
+    case 0x32C6FDF7:
+      rv = 7;
+      break;
+
+    case 0xFF4AB5:
+    case 0x1BC0157B:
+      rv = 8;
+      break;
+
+    case 0xFF52AD:
+    case 0x3EC3FC1B:
+      rv = 9;
+      break;
+
+  }
+  return rv;
+
+}
+
+char irTranslateHexMode(uint8_t inByte)
+{
+
+    char outChar = 0;
+
+    switch(inByte){
+
+        case 0: case 1: case 2: case 3: case 4:
+        case 5: case 6: case 7: case 8: case 9:      
+          outChar = (char)inByte;
+        break;
+
+        case 13: // Blue prev
+              outChar = 'A';
+        break;
+           
+        case 14: // Blue next
+              outChar = 'B';
+        break;
+
+        case 15: // Green play/pause
+              outChar = 'C';
+        break;
+           
+        case 16: // Purple -
+              outChar = 'D';
+        break;    
+
+        case 17: // Purple +     
+              outChar = 'E';
+        break;
+           
+        case 18: // Purple EQ
+              outChar = 'F';
+        break;
+
+    }
+
+    return outChar;
+
+}
+
+#endif
