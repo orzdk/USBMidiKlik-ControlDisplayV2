@@ -31,6 +31,4 @@ uint8_t getdigit(uint8_t num, uint8_t n)
 }
 
 
-
-
 #endif

@@ -3,9 +3,21 @@
 #define _CD_IR_H_
 #pragma once
 
+#define RED_CH_MINUS  10
+#define RED_CH        11
+#define RED_CH_PLUS   12
+#define BLUE_PREV     13
+#define BLUE_NEXT     14
+#define GREEN_PLAY    15
+#define PURPLE_MINUS  16
+#define PURPLE_PLUS   17
+#define PURPLE_EQ     18
+#define PLUS_100      19
+#define PLUS_200      20
 
 uint8_t irTranslate(uint64_t val)
 {
+
   uint8_t rv = 99;
   if (val == ((0xffffffff | val) < 0xFFFF)) return rv;
 
@@ -47,6 +59,7 @@ uint8_t irTranslate(uint64_t val)
       break;
 
     case 0xFFA8570:
+    case 0xFFA857:
     case 0xA3C8EDDB:
       rv = 17;
       break;
