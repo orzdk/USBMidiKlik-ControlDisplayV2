@@ -52,11 +52,12 @@ uint8_t DISP_Mode = 0;
 
 uint8_t DISP_Transformers[2];
 
-uint8_t DISP_x = 0;
-uint8_t DISP_y = 0;
-uint8_t DISP_z = 0;
-uint8_t DISP_d = 0;
-uint8_t DISP_s = 0;
+uint8_t DISP_Cmd[2];
+uint8_t DISP_x[2];
+uint8_t DISP_y[2];
+uint8_t DISP_z[2];
+uint8_t DISP_d[2];
+uint8_t DISP_s[2];
 
 uint8_t DISP_ParmSel = 0;
 uint8_t DISP_ParmVals[3] = {0,0,0};
@@ -150,152 +151,170 @@ void requestScreenData()
 
 void updateScreen()
 {
-  Serial.println("updateScreen()");
-  
-  char line2[20] = "";
-  char line3[20] = "";
-  char line4[20] = "";
-  char line5[20] = "";
-  
-  char tbuffer[1];
-  char pbuffer[1];
-  char sbuffer[1];
-  char xbuffer[1];
-  char ybuffer[1];
-  char zbuffer[1];
-
-  char pv0buffer[1];
-  char pv1buffer[1];
-  char pv2buffer[1];
+    Serial.print("updateScreen() DISP_SCREEN = ");
+    Serial.println(DISP_Screen);
     
-  sprintf(pbuffer, "%d", DISP_Port);
-  sprintf(sbuffer, "%d", DISP_Slot);
-  sprintf(tbuffer, "%d", DISP_Transformers[DISP_Slot]);
-  sprintf(xbuffer, "%d", DISP_x);
-  sprintf(ybuffer, "%d", DISP_y);
-  sprintf(zbuffer, "%d", DISP_z);
-  
-  sprintf(pv0buffer, "%d", DISP_ParmVals[0]);
-  sprintf(pv1buffer, "%d", DISP_ParmVals[1]);
-  sprintf(pv2buffer, "%d", DISP_ParmVals[2]);
-
-  strncpy(DISP_LINE_1, screenTitles[DISP_Screen], sizeof(DISP_LINE_1));
-  
-  if (DISP_Screen == MENU){
-
-    strncpy(DISP_LINE_2, "> 1: Routes", 20);
-    strncpy(DISP_LINE_3, "> 2: Transformers", 20);
-    strncpy(DISP_LINE_4, "> 3: Sysex", 20);
-    strncpy(DISP_LINE_5, "", 20);
-    strncpy(DISP_LINE_6, "", 20);
-    strncpy(DISP_LINE_7, "1-3,EQ", 20);
-   
-
-  } else if (DISP_Screen == ROUTES){
-
-    strcat(line2, DISP_CableOrJack == CABLE ? "CBL " : "JCK "); 
-    strcat(line2, pbuffer); 
-    strcat(line2, GLB_Filter_XO.filter); 
-
-    strcat(line3, "C:");
-    strcat(line3, cableTargetsTxt);
+    char line2[20] = "";
+    char line3[20] = "";
+    char line4[20] = "";
+    char line5[20] = "";
     
-    strcat(line4, "J:");
-    strcat(line4, jackTargetsTxt);
+    char pbuffer[1];
+    char slbuffer[1];
+  
+    sprintf(pbuffer, "%d", DISP_Port);
+    sprintf(slbuffer, "%d", DISP_Slot);
+  
+    char cbuffer[1];
+    char xbuffer[1];
+    char ybuffer[1];
+    char zbuffer[1];
+    char dbuffer[1];
+    char sbuffer[1];
+  
+    sprintf(cbuffer, "%d", DISP_Cmd[DISP_Slot]);
+    sprintf(xbuffer, "%d", DISP_x[DISP_Slot]);
+    sprintf(ybuffer, "%d", DISP_y[DISP_Slot]);
+    sprintf(zbuffer, "%d", DISP_z[DISP_Slot]);
+    sprintf(dbuffer, "%d", DISP_d[DISP_Slot]);
+    sprintf(sbuffer, "%d", DISP_s[DISP_Slot]);
+  
+    char pv0buffer[1];
+    char pv1buffer[1];
+    char pv2buffer[1];
     
-    strncpy(DISP_LINE_2, line2, 20);
-    strncpy(DISP_LINE_3, line3, 20);
-    strncpy(DISP_LINE_4, line4, 20);
-    strncpy(DISP_LINE_5, "", 20);
-    strncpy(DISP_LINE_6, "", 20);
-    strncpy(DISP_LINE_7, "", 20);
+    sprintf(pv0buffer, "%d", DISP_ParmVals[0]);
+    sprintf(pv1buffer, "%d", DISP_ParmVals[1]);
+    sprintf(pv2buffer, "%d", DISP_ParmVals[2]);
+  
+    strncpy(DISP_LINE_1, screenTitles[DISP_Screen], sizeof(DISP_LINE_1));
+    
+    if (DISP_Screen == MENU){
 
-
-  } else if (DISP_Screen == TRANSFORMERS){
-
-    if (DISP_Mode == VIEW){
-
-      strcat(line2, DISP_CableOrJack == CABLE ? "CBL " : "JCK ");
-      strcat(line2, pbuffer);     
-      strcat(line2, " SLT "); 
-      strcat(line2, sbuffer);
-      strcat(line2, " TRF ");
-      strcat(line2, tbuffer);
-
-      strcat(line3,cCmd[DISP_Transformers[0]].commandTitle);
-      strcat(line4,cCmd[DISP_Transformers[1]].commandTitle);
+      Serial.println("updateScreen() DISP_Screen == MENU ");
       
-      if (DISP_Slot == 0 ) strcat(line3," <-");
-      if (DISP_Slot == 1 ) strcat(line4," <-");
+      strncpy(DISP_LINE_2, "> 1: Routes", 20);
+      strncpy(DISP_LINE_3, "> 2: Transformers", 20);
+      strncpy(DISP_LINE_4, "> 3: Sysex", 20);
+      strncpy(DISP_LINE_5, "", 20);
+      strncpy(DISP_LINE_6, "", 20);
+      strncpy(DISP_LINE_7, "1-3,EQ", 20);
+     
+  
+    } else if (DISP_Screen == ROUTES){
+  
+      strcat(line2, DISP_CableOrJack == CABLE ? "CBL " : "JCK "); 
+      strcat(line2, pbuffer); 
+      strcat(line2, GLB_Filter_XO.filter); 
+  
+      strcat(line3, "C:");
+      strcat(line3, cableTargetsTxt);
+      
+      strcat(line4, "J:");
+      strcat(line4, jackTargetsTxt);
       
       strncpy(DISP_LINE_2, line2, 20);
-      strncpy(DISP_LINE_3, "", 20);
-      strncpy(DISP_LINE_4, line3, 20);
-      strncpy(DISP_LINE_5, line4, 20);
-      strncpy(DISP_LINE_6, "", 20);
-      strncpy(DISP_LINE_7, "[>||] Config", 20);
-
-    } else if (DISP_Mode == SET){
-
-      if (cCmd[DISP_Transformers[DISP_Slot]].parameterCount > 0){
-        strcat(line3, cCmd[DISP_Transformers[DISP_Slot]].parameterTitles[0]);
-        strcat(line3, ": ");
-        strcat(line3, xbuffer);
-        
-        strcat(line3, "/");
-        if (DISP_ParmNegative[0]) strcat(line3,"-");
-        strcat(line3, pv0buffer);
-        
-        if (DISP_ParmSel == 0) strcat(line3," <-");
-        
-      }
-      
-      if (cCmd[DISP_Transformers[DISP_Slot]].parameterCount > 1){
-        strcat(line4, cCmd[DISP_Transformers[DISP_Slot]].parameterTitles[1]);
-        strcat(line4, ": ");
-        strcat(line4, ybuffer);
-
-        strcat(line4, "/");
-        if (DISP_ParmNegative[1]) strcat(line4,"-");
-        strcat(line4, pv1buffer);
-
-        if (DISP_ParmSel == 1) strcat(line4," <-");
-      
-      }
-      
-      if (cCmd[DISP_Transformers[DISP_Slot]].parameterCount > 2){
-        strcat(line5, cCmd[DISP_Transformers[DISP_Slot]].parameterTitles[2]);
-        strcat(line5, ": ");
-        strcat(line5, zbuffer);
-
-        strcat(line5, "/");
-        if (DISP_ParmNegative[2]) strcat(line5,"-");
-        strcat(line5, pv2buffer);
-        
-        if (DISP_ParmSel == 2) strcat(line5," <-");
-      
-      }
-
-      strncpy(DISP_LINE_1, cCmd[DISP_Transformers[DISP_Slot]].commandTitle, 20);
-      strncpy(DISP_LINE_2, "", 20);    
       strncpy(DISP_LINE_3, line3, 20);
       strncpy(DISP_LINE_4, line4, 20);
-      strncpy(DISP_LINE_5, line5, 20);   
-      strncpy(DISP_LINE_6, "", 20);
-      strncpy(DISP_LINE_7, "[>||] Cancel", 20); 
-
-    }
-
-  }
-  else if (DISP_Screen == SYSEX){
-      strncpy(DISP_LINE_2, "", 20);
-      strncpy(DISP_LINE_3, "", 20);
-      strncpy(DISP_LINE_4, "", 20);
       strncpy(DISP_LINE_5, "", 20);
       strncpy(DISP_LINE_6, "", 20);
       strncpy(DISP_LINE_7, "", 20);
+  
+  
+    } else if (DISP_Screen == TRANSFORMERS){
+  
+      if (DISP_Mode == VIEW){
+  
+        strcat(line2, DISP_CableOrJack == CABLE ? "CBL " : "JCK ");
+        strcat(line2, pbuffer);     
+        strcat(line2, " SLT "); 
+        strcat(line2, slbuffer);
+        strcat(line2, " CMD ");
+        strcat(line2, cbuffer);
+  
+        strcat(line3,cCmd[DISP_Cmd[0]].commandTitle);
+        if (DISP_Slot == 0 ) strcat(line3," <-");
+  
+        strcat(line4,cCmd[DISP_Cmd[1]].commandTitle);
+        if (DISP_Slot == 1 ) strcat(line4," <-");
+  
+        strcat(line5,xbuffer);
+        strcat(line5,",");
+        strcat(line5,ybuffer);
+        strcat(line5,",");
+        strcat(line5,zbuffer);
+        strcat(line5,",");
+        strcat(line5,dbuffer);
+        strcat(line5,",");
+        strcat(line5,sbuffer);
+        
+        strncpy(DISP_LINE_2, line2, 20);
+        strncpy(DISP_LINE_3, "", 20);
+        strncpy(DISP_LINE_4, line3, 20);
+        strncpy(DISP_LINE_5, line4, 20);
+        strncpy(DISP_LINE_6, line5, 20);
+        strncpy(DISP_LINE_7, "[100+] To config", 20);
+  
+      } else if (DISP_Mode == SET){
+  
+        if (cCmd[DISP_Cmd[DISP_Slot]].parameterCount > 0){
+          strcat(line3, cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[0]);
+          strcat(line3, ": ");
+          strcat(line3, xbuffer);
+          
+          strcat(line3, "/");
+          if (DISP_ParmNegative[0]) strcat(line3,"-");
+          strcat(line3, pv0buffer);
+          
+          if (DISP_ParmSel == 0) strcat(line3," <-");
+          
+        }
+        
+        if (cCmd[DISP_Cmd[DISP_Slot]].parameterCount > 1){
+          strcat(line4, cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[1]);
+          strcat(line4, ": ");
+          strcat(line4, ybuffer);
+  
+          strcat(line4, "/");
+          if (DISP_ParmNegative[1]) strcat(line4,"-");
+          strcat(line4, pv1buffer);
+  
+          if (DISP_ParmSel == 1) strcat(line4," <-");
+        
+        }
+        
+        if (cCmd[DISP_Cmd[DISP_Slot]].parameterCount > 2){
+          strcat(line5, cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[2]);
+          strcat(line5, ": ");
+          strcat(line5, zbuffer);
+  
+          strcat(line5, "/");
+          if (DISP_ParmNegative[2]) strcat(line5,"-");
+          strcat(line5, pv2buffer);
+          
+          if (DISP_ParmSel == 2) strcat(line5," <-");
+        
+        }
+  
+        strncpy(DISP_LINE_1, cCmd[DISP_Cmd[DISP_Slot]].commandTitle, 20);
+        strncpy(DISP_LINE_2, "", 20);    
+        strncpy(DISP_LINE_3, line3, 20);
+        strncpy(DISP_LINE_4, line4, 20);
+        strncpy(DISP_LINE_5, line5, 20);   
+        strncpy(DISP_LINE_6, "", 20);
+        strncpy(DISP_LINE_7, "Q:[100+],S:[200+]", 20); 
+  
+    }
+    else if (DISP_Screen == SYSEX){
+        strncpy(DISP_LINE_2, "", 20);
+        strncpy(DISP_LINE_3, "", 20);
+        strncpy(DISP_LINE_4, "", 20);
+        strncpy(DISP_LINE_5, "", 20);
+        strncpy(DISP_LINE_6, "", 20);
+        strncpy(DISP_LINE_7, "", 20);
+    }    
   }
-
+  
   displayLines dLines = { DISP_LINE_1, DISP_LINE_2, DISP_LINE_3, DISP_LINE_4, DISP_LINE_5, DISP_LINE_6, DISP_LINE_7 };
   renderScreenP(&display, &dLines);
 }
@@ -305,12 +324,12 @@ void updateScreen()
 void saveTransformer()
 {
   uint8_t signMask = 0x00 | DISP_ParmNegative[0] | DISP_ParmNegative[1] << 1 | DISP_ParmNegative[2] << 2;
-  uint8_t encoded = DISP_Transformers[DISP_Slot] == 0xB;  
+  uint8_t encoded =  DISP_Cmd[DISP_Slot] == 0xB;  
 
   uint8_t sysex[16] = {
       0xF0, 0x77, 0x77, 0x78, 0x0F, 0x3,
       DISP_CableOrJack, DISP_Port, DISP_Slot, 
-      DISP_Transformers[DISP_Slot], 
+      DISP_Cmd[DISP_Slot], 
       DISP_ParmVals[0], DISP_ParmVals[1], DISP_ParmVals[2], 
       encoded, 
       signMask, 
@@ -329,7 +348,6 @@ void saveTransformer()
   Serial.println("");
   
   Serial3.write(sysex, 16);
-
 }
 
 void processIRKeypress(uint8_t inByte)
@@ -346,6 +364,9 @@ void processIRKeypress(uint8_t inByte)
          DISP_Screen++;
       }  
 
+    }
+    else if (inByte == GREEN_PLAY){
+      requestScreenData();
     }
     else {
 
@@ -400,17 +421,14 @@ void processIRKeypress(uint8_t inByte)
   
             case PLUS_100:   
               DISP_Mode = !DISP_Mode;
-              DISP_ParmVals[0] = 0;
-              DISP_ParmVals[1] = 0;
-              DISP_ParmVals[2] = 0;
             break;
   
             case PURPLE_MINUS: 
-              if (DISP_Transformers[DISP_Slot] > 0) DISP_Transformers[DISP_Slot]--;
+              if (DISP_Cmd[DISP_Slot] > 0) DISP_Cmd[DISP_Slot]--;
             break;    
   
             case PURPLE_PLUS:               
-              if (DISP_Transformers[DISP_Slot] < 0xD) DISP_Transformers[DISP_Slot]++;
+              if (DISP_Cmd[DISP_Slot] < 0xD) DISP_Cmd[DISP_Slot]++;
             break;
   
           }  
@@ -459,8 +477,7 @@ void processIRKeypress(uint8_t inByte)
       }
 
     }
-    
-    requestScreenData();
+
     updateScreen();
 }
 
@@ -479,7 +496,7 @@ void processSerialBuffer()
     uint8_t RCV_RouteOrFilter = serialMessageBuffer[5];
     uint8_t RCV_CableOrJackSrc = serialMessageBuffer[6];
     uint8_t RCV_Port = serialMessageBuffer[7];
-    uint8_t RCV_TargetTypeFilterOrSlot = serialMessageBuffer[8];
+    uint8_t RCV_Target = serialMessageBuffer[8];
 
     if (RCV_RouteOrFilter == ROUTE) { 
 
@@ -518,23 +535,27 @@ void processSerialBuffer()
     else if (RCV_RouteOrFilter == FILTER) {  
       
       for (int i=0;i<4;i++) {
-        GLB_Filter_XO.filter[i] = RCV_TargetTypeFilterOrSlot & (1 << i) ? 'X' : '-';
+        GLB_Filter_XO.filter[i] = RCV_Target & (1 << i) ? 'X' : '-';
       }
   
     }  
     else if (RCV_RouteOrFilter == TRANSFORMER){
-      
-      DISP_Transformers[RCV_TargetTypeFilterOrSlot] = serialMessageBuffer[9];
-      DISP_x = serialMessageBuffer[10];
-      DISP_y = serialMessageBuffer[11];
-      DISP_z = serialMessageBuffer[12];
-      DISP_d = serialMessageBuffer[13];
-      DISP_s = serialMessageBuffer[14];
-      
+
+      uint8_t RCV_Slot = RCV_Target;
+
+      DISP_Cmd[RCV_Slot] = serialMessageBuffer[9];
+      DISP_x[RCV_Slot] = serialMessageBuffer[10];
+      DISP_y[RCV_Slot] = serialMessageBuffer[11];
+      DISP_z[RCV_Slot] = serialMessageBuffer[12];
+      DISP_d[RCV_Slot] = serialMessageBuffer[13];
+      DISP_s[RCV_Slot] = serialMessageBuffer[14];
+         
     }      
 
     resetSerialBuffer(); 
 }
+
+/* Main  */
 
 void processSerialData(uint8_t dataByte) 
 {  
@@ -562,8 +583,6 @@ void processSerialData(uint8_t dataByte)
    }
 }
 
-/* Main  */
-
 void processSerial()
 {
   if (Serial3.available() > 0){
@@ -585,15 +604,19 @@ void loop()
 void setup()
 {
   Serial.begin(9600);
+Serial.println("alive");
+  
   Serial3.begin(31250);
+  delay(3000);
+  
+  Serial.println("alive");
   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);    
   display.clearDisplay();
-  
   display.display();
 
+  Serial.println("Calling update Screen");
   updateScreen();
   
   irrecv.enableIRIn();
-  
 }
