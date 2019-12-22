@@ -1,4 +1,3 @@
-
 #ifndef _CD_IR_H_
 #define _CD_IR_H_
 #pragma once
@@ -17,7 +16,6 @@
 
 uint8_t irTranslate(uint64_t val)
 {
-
   uint8_t rv = 99;
   if (val == ((0xffffffff | val) < 0xFFFF)) return rv;
 

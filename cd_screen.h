@@ -1,4 +1,3 @@
-
 #ifndef _CD_SCREEN_H_
 #define _CD_SCREEN_H_
 #pragma once
@@ -9,7 +8,7 @@ struct displayLines{
 
 void renderScreenP(Adafruit_SSD1306* d, displayLines* lines)
 {
-  Serial.println("arrived in renderScreenP");
+  Serial.println("renderScreenP()");
   
   d->clearDisplay();
   d->setTextSize(1);
@@ -37,8 +36,6 @@ void renderScreenP(Adafruit_SSD1306* d, displayLines* lines)
   d->print(lines->line[6]);
   
   d->display();
-
-  Serial.println("Rendered");
 
 }
 

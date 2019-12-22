@@ -1,3 +1,16 @@
+    Serial.println("SYSEX SEND");
+
+  for (int i=0;i<16;i++){
+    if (sysex[i] < 0x10) {
+      Serial.print("0");
+    }
+    Serial.print(sysex[i], HEX);
+    Serial.print(" ");
+  }
+  
+  Serial.println("");
+  
+  
   for (int i=0;i<11;i++){
     if (sysex_transformers_slot0[i] < 0x10) {
       Serial.print("0");

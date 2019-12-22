@@ -1,4 +1,3 @@
-
 #ifndef _CD_MIDI_H_
 #define _CD_MIDI_H_
 #pragma once

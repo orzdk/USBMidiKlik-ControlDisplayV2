@@ -26,8 +26,12 @@ enum rf { ROUTE=0x1 , FILTER=0x2, TRANSFORMER=0x3 };
 enum sc { MENU=0x0, ROUTES=0x1, TRANSFORMERS=0x2, SYSEX=0x3 };
 enum dm { VIEW=0x0, SET=0x1 };
 
-char* screenTitles[4] = { "Menu", "---- Routes ---- ", "-- Transformers -- ", "----- Sysex -----" };
+char* screenTitles[4] = { "----- Menu -----", "---- Routes ---- ", "-- Transformers -- ", "----- Sysex -----" };
 uint8_t numScreens = 4;
+
+char dialBuffer[20];
+uint8_t dialBufferPos = 0;
+uint8_t dialCableOrJack = 0;
 
 char DISP_LINE_1[20] = "";
 char DISP_LINE_2[20] = "";
@@ -37,32 +41,22 @@ char DISP_LINE_5[20] = "";
 char DISP_LINE_6[20] = "";
 char DISP_LINE_7[20] = "";
 
-displayLines DISP_LINES[7];
-
-char dialBuffer[20];
-uint8_t dialBufferPos = 0;
-uint8_t dialCableOrJack = 0;
-
 uint8_t DISP_Screen = 0;
 uint8_t DISP_CableOrJack = 0;
 uint8_t DISP_Port = 0;
 uint8_t DISP_Slot = 0;
-uint8_t DISP_Transformer = 0;
 uint8_t DISP_Mode = 0;
-
-uint8_t DISP_Transformers[2];
 
 uint8_t DISP_Cmd[2];
 uint8_t DISP_x[2];
 uint8_t DISP_y[2];
 uint8_t DISP_z[2];
-uint8_t DISP_d[2];
 uint8_t DISP_s[2];
 
 uint8_t DISP_ParmSel = 0;
 uint8_t DISP_ParmVals[3] = {0,0,0};
 uint8_t DISP_ParmNegative[3] = {0,0,0};
-      
+
 uint16_t GLB_BMT_Cable;
 uint16_t GLB_BMT_Jack;
 uint8_t GLB_Filter = 0;
@@ -99,7 +93,6 @@ uint8_t bufferDecCharToInt(uint8_t offset)
 
 uint8_t bufferHexCharToHex(uint8_t offset)
 {
-
   char msbchar = dialBuffer[offset];
   char lsbchar = dialBuffer[offset+1];
 
@@ -151,8 +144,7 @@ void requestScreenData()
 
 void updateScreen()
 {
-    Serial.print("updateScreen() DISP_SCREEN = ");
-    Serial.println(DISP_Screen);
+    Serial.print("updateScreen() DISP_SCREEN = ");Serial.println(DISP_Screen);
     
     char line2[20] = "";
     char line3[20] = "";
@@ -176,7 +168,6 @@ void updateScreen()
     sprintf(xbuffer, "%d", DISP_x[DISP_Slot]);
     sprintf(ybuffer, "%d", DISP_y[DISP_Slot]);
     sprintf(zbuffer, "%d", DISP_z[DISP_Slot]);
-    sprintf(dbuffer, "%d", DISP_d[DISP_Slot]);
     sprintf(sbuffer, "%d", DISP_s[DISP_Slot]);
   
     char pv0buffer[1];
@@ -190,9 +181,7 @@ void updateScreen()
     strncpy(DISP_LINE_1, screenTitles[DISP_Screen], sizeof(DISP_LINE_1));
     
     if (DISP_Screen == MENU){
-
-      Serial.println("updateScreen() DISP_Screen == MENU ");
-      
+            
       strncpy(DISP_LINE_2, "> 1: Routes", 20);
       strncpy(DISP_LINE_3, "> 2: Transformers", 20);
       strncpy(DISP_LINE_4, "> 3: Sysex", 20);
@@ -243,8 +232,6 @@ void updateScreen()
         strcat(line5,ybuffer);
         strcat(line5,",");
         strcat(line5,zbuffer);
-        strcat(line5,",");
-        strcat(line5,dbuffer);
         strcat(line5,",");
         strcat(line5,sbuffer);
         
@@ -323,32 +310,92 @@ void updateScreen()
 
 void saveTransformer()
 {
-  uint8_t signMask = 0x00 | DISP_ParmNegative[0] | DISP_ParmNegative[1] << 1 | DISP_ParmNegative[2] << 2;
-  uint8_t encoded =  DISP_Cmd[DISP_Slot] == 0xB;  
+  uint8_t signMask = 0x0 | DISP_ParmNegative[0] | DISP_ParmNegative[1] << 1 | DISP_ParmNegative[2] << 2;
 
-  uint8_t sysex[16] = {
+  uint8_t sysex[15] = {
       0xF0, 0x77, 0x77, 0x78, 0x0F, 0x3,
       DISP_CableOrJack, DISP_Port, DISP_Slot, 
       DISP_Cmd[DISP_Slot], 
       DISP_ParmVals[0], DISP_ParmVals[1], DISP_ParmVals[2], 
-      encoded, 
       signMask, 
       0xF7
   };
-
-  Serial.println("SYSEX SEND");
-
-  for (int i=0;i<16;i++){
-    if (sysex[i] < 0x10) {
-      Serial.print("0");
-    }
-    Serial.print(sysex[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.println("");
   
   Serial3.write(sysex, 16);
 }
+
+/* Proces Incoming - */
+
+void resetSerialBuffer()
+{
+    serialMessageBufferIDX = 0;
+    messageInProgress = 0;
+    memset(serialMessageBuffer, 0, sizeof(serialMessageBuffer));
+}
+
+void processSerialBuffer()
+{
+
+    uint8_t RCV_RouteOrFilter = serialMessageBuffer[5];
+    uint8_t RCV_CableOrJackSrc = serialMessageBuffer[6];
+    uint8_t RCV_Port = serialMessageBuffer[7];
+    uint8_t RCV_Target = serialMessageBuffer[8];
+
+    if (RCV_RouteOrFilter == ROUTE) { 
+
+        uint8_t dtstrt = 9;
+        uint16_t BMT = 0;
+      
+        while (serialMessageBuffer[dtstrt] != 0xF7){
+           BMT |= (1 << serialMessageBuffer[dtstrt++]);
+        }
+    
+       for(uint8_t i=0;i<16;i++){
+          if (BMT & (1 << i)){  
+                  
+            char dig1 = getdigit(i,0)+'0';
+            char dig2 = getdigit(i,1)+'0'; 
+    
+            if (i>=10){       
+              targetsTxt[targetsTxtPos++] = dig2;
+              targetsTxt[targetsTxtPos++] = dig1;
+              targetsTxt[targetsTxtPos++] = ' ';
+            } else {
+              targetsTxt[targetsTxtPos++] = dig1;
+              targetsTxt[targetsTxtPos++] = ' ';
+            }
+          }
+       } 
+    
+       if (RCV_CableOrJackSrc == CABLE){
+          strncpy(cableTargetsTxt, targetsTxt, sizeof(cableTargetsTxt));  
+       } else 
+       if (RCV_CableOrJackSrc == JACK){
+          strncpy(jackTargetsTxt, targetsTxt, sizeof(jackTargetsTxt));
+       }
+ 
+    }
+    else if (RCV_RouteOrFilter == FILTER) {  
+      
+      for (int i=0;i<4;i++) {
+        GLB_Filter_XO.filter[i] = RCV_Target & (1 << i) ? 'X' : '-';
+      }
+  
+    }  
+    else if (RCV_RouteOrFilter == TRANSFORMER){
+
+      DISP_Cmd[RCV_Target] = serialMessageBuffer[9];
+      DISP_x[RCV_Target] = serialMessageBuffer[10];
+      DISP_y[RCV_Target] = serialMessageBuffer[11];
+      DISP_z[RCV_Target] = serialMessageBuffer[12];
+      DISP_s[RCV_Target] = serialMessageBuffer[14];
+         
+    }      
+
+    resetSerialBuffer(); 
+}
+
+/* Main  */
 
 void processIRKeypress(uint8_t inByte)
 {  
@@ -481,114 +528,24 @@ void processIRKeypress(uint8_t inByte)
     updateScreen();
 }
 
-/* Proces Incoming - */
-
-void resetSerialBuffer()
-{
-    serialMessageBufferIDX = 0;
-    messageInProgress = 0;
-    memset(serialMessageBuffer, 0, sizeof(serialMessageBuffer));
-}
-
-void processSerialBuffer()
-{
-
-    uint8_t RCV_RouteOrFilter = serialMessageBuffer[5];
-    uint8_t RCV_CableOrJackSrc = serialMessageBuffer[6];
-    uint8_t RCV_Port = serialMessageBuffer[7];
-    uint8_t RCV_Target = serialMessageBuffer[8];
-
-    if (RCV_RouteOrFilter == ROUTE) { 
-
-        uint8_t dtstrt = 9;
-        uint16_t BMT = 0;
-      
-        while (serialMessageBuffer[dtstrt] != 0xF7){
-           BMT |= (1 << serialMessageBuffer[dtstrt++]);
-        }
-    
-       for(uint8_t i=0;i<16;i++){
-          if (BMT & (1 << i)){  
-                  
-            char dig1 = getdigit(i,0)+'0';
-            char dig2 = getdigit(i,1)+'0'; 
-    
-            if (i>=10){       
-              targetsTxt[targetsTxtPos++] = dig2;
-              targetsTxt[targetsTxtPos++] = dig1;
-              targetsTxt[targetsTxtPos++] = ' ';
-            } else {
-              targetsTxt[targetsTxtPos++] = dig1;
-              targetsTxt[targetsTxtPos++] = ' ';
-            }
-          }
-       } 
-    
-       if (RCV_CableOrJackSrc == CABLE){
-          strncpy(cableTargetsTxt, targetsTxt, sizeof(cableTargetsTxt));  
-       } else 
-       if (RCV_CableOrJackSrc == JACK){
-          strncpy(jackTargetsTxt, targetsTxt, sizeof(jackTargetsTxt));
-       }
- 
-    }
-    else if (RCV_RouteOrFilter == FILTER) {  
-      
-      for (int i=0;i<4;i++) {
-        GLB_Filter_XO.filter[i] = RCV_Target & (1 << i) ? 'X' : '-';
-      }
-  
-    }  
-    else if (RCV_RouteOrFilter == TRANSFORMER){
-
-      uint8_t RCV_Slot = RCV_Target;
-
-      DISP_Cmd[RCV_Slot] = serialMessageBuffer[9];
-      DISP_x[RCV_Slot] = serialMessageBuffer[10];
-      DISP_y[RCV_Slot] = serialMessageBuffer[11];
-      DISP_z[RCV_Slot] = serialMessageBuffer[12];
-      DISP_d[RCV_Slot] = serialMessageBuffer[13];
-      DISP_s[RCV_Slot] = serialMessageBuffer[14];
-         
-    }      
-
-    resetSerialBuffer(); 
-}
-
-/* Main  */
-
 void processSerialData(uint8_t dataByte) 
-{  
-   
+{     
    if (dataByte == 0xF7 && messageInProgress ) {
       
-      serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-      processSerialBuffer();
+     serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
+     processSerialBuffer();
 
-      if (--pendingConfigPackets == 0){
-         updateScreen();
-      }
+     if (--pendingConfigPackets == 0){
+        updateScreen();
+     }
    }
    else if (dataByte == 0xF0) {
-
-      serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-      messageInProgress = 1;
-
+     serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
+     messageInProgress = 1;
    }
    else if ( messageInProgress ){
-
-      serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-      Serial.print("Added Databyte ");Serial.println(dataByte, HEX); 
-
+     serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
    }
-}
-
-void processSerial()
-{
-  if (Serial3.available() > 0){
-    char inByte = Serial3.read();
-    processSerialData(inByte);
-  }
 }
 
 void loop()
@@ -598,25 +555,23 @@ void loop()
     processIRKeypress(v); 
     irrecv.resume();
   }
-  processSerial(); 
+  
+  if (Serial3.available() > 0){
+    char inByte = Serial3.read();
+    processSerialData(inByte);
+  }
 }
 
 void setup()
 {
   Serial.begin(9600);
-Serial.println("alive");
-  
   Serial3.begin(31250);
-  delay(3000);
-  
-  Serial.println("alive");
-  
+   
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);    
   display.clearDisplay();
   display.display();
-
-  Serial.println("Calling update Screen");
-  updateScreen();
   
   irrecv.enableIRIn();
+  
+  updateScreen();
 }

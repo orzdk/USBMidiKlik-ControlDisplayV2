@@ -1,4 +1,3 @@
-
 #ifndef _CD_CALC_H_
 #define _CD_CALC_H_
 #pragma once
