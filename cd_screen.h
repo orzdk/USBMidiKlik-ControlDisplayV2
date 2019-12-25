@@ -2,11 +2,7 @@
 #define _CD_SCREEN_H_
 #pragma once
 
-struct displayLines{
-  char* line[7];  
-};
-
-void renderScreenP(Adafruit_SSD1306* d, displayLines* lines)
+void renderScreenP(Adafruit_SSD1306* d, char lines[][20])
 {
   Serial.println("renderScreenP()");
   
@@ -15,25 +11,25 @@ void renderScreenP(Adafruit_SSD1306* d, displayLines* lines)
   d->setTextColor(WHITE);
 
   d->setCursor(0,0);
-  d->print(lines->line[0]);
+  d->print(lines[0]);
 
   d->setCursor(0,9);
-  d->print(lines->line[1]);
+  d->print(lines[1]);
 
   d->setCursor(0,18);
-  d->print(lines->line[2]);
+  d->print(lines[2]);
 
   d->setCursor(0,27);
-  d->print(lines->line[3]);
+  d->print(lines[3]);
 
   d->setCursor(0,36);
-  d->print(lines->line[4]);
+  d->print(lines[4]);
   
   d->setCursor(0,45);
-  d->print(lines->line[5]);
+  d->print(lines[5]);
 
   d->setCursor(0,54);
-  d->print(lines->line[6]);
+  d->print(lines[6]);
   
   d->display();
 
