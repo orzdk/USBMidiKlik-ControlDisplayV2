@@ -31,7 +31,7 @@ uint8_t dialHexBufferPos = 0;
 
 char slines[7][20] = {"","","","","","",""};
 uint8_t DISP_Cmd[2];
-uint8_t DISP_ParmVals[4][2];
+uint8_t DISP_ParmVals[4][1];
 uint8_t DISP_ParmVals_Sign[3][2];
 
 char filter[5];
@@ -121,6 +121,10 @@ void requestPortTransformerDump()
 
 /* Screen Handling */
 
+struct PARMVAL{
+  char val[3];
+};
+
 void updateScreen()
 { 
     memset(slines, 0, sizeof(slines[0][0]) * 20 * 7);
@@ -129,8 +133,11 @@ void updateScreen()
     char slotbuffer[2];
     char cmdbuffer[2];
     
-    char parmvals_buffer[3][2] = {0,0,0};
     char dialvals_buffer[2][2] = {0,0};
+
+    PARMVAL pv1;
+    PARMVAL pv2;
+    PARMVAL pv3;
       
     sprintf(portbuffer, "%d", DISP_Port);
     sprintf(slotbuffer,"%d", DISP_Slot);
@@ -139,10 +146,16 @@ void updateScreen()
     sprintf(dialvals_buffer[0], "%d", dialBuffer[0]);
     sprintf(dialvals_buffer[1], "%d", dialBuffer[1]);
 
-    sprintf(parmvals_buffer[0], "%d", DISP_ParmVals[0][DISP_Slot]);
-    sprintf(parmvals_buffer[1], "%d", DISP_ParmVals[1][DISP_Slot]);
-    sprintf(parmvals_buffer[2], "%d", DISP_ParmVals[2][DISP_Slot]);
+    Serial.println("DISP_ParmVals[0][DISP_Slot]");
+    Serial.println(DISP_ParmVals[0][DISP_Slot]);
+    
+    sprintf(pv1.val, "%03i", DISP_ParmVals[0][DISP_Slot]);
+    sprintf(pv2.val, "%03i", DISP_ParmVals[1][DISP_Slot]);
+    sprintf(pv3.val, "%03i", DISP_ParmVals[2][DISP_Slot]);
 
+    Serial.println("pv1");
+    Serial.println(pv1.val);
+    
     if (DISP_Screen == MENU){
       strcat(slines[0], "-- UMK --");
       strcat(slines[1], "> 1: Routes"); 
@@ -190,12 +203,20 @@ void updateScreen()
           strcat(slines[3],cCmd[DISP_Cmd[1]].commandTitle);
           if (DISP_Slot == 1 ) strcat(slines[3]," <-");
     
-          strcat(slines[4],parmvals_buffer[0]);
-          strcat(slines[4],",");
-          strcat(slines[4],parmvals_buffer[1]);
-          strcat(slines[4],",");
-          strcat(slines[4],parmvals_buffer[2]);
+          if (parmCount > 0) {
+            strcat(slines[4],pv1.val);
+          }
           
+          if (parmCount > 1) {
+            strcat(slines[4],",");
+            strcat(slines[4],pv2.val);
+          }
+          
+          if (parmCount > 2) {
+            strcat(slines[4],",");
+            strcat(slines[4],pv3.val);
+          }
+         
           strcat(slines[6], "CFG: [100+]");     
              
         } 
@@ -208,10 +229,13 @@ void updateScreen()
           {  
             strcat(slines[2+i], cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[i]);
             strcat(slines[2+i], ": ");
-  
+           
             if ( DISP_ParmVals_Sign[i][DISP_Slot] ) strcat(slines[2+i],"-");
-            strcat(slines[2+i], parmvals_buffer[i]);
-            
+
+            if (i==0) strcat(slines[2+i], pv1.val);
+            if (i==1) strcat(slines[2+i], pv2.val);
+            if (i==2) strcat(slines[2+i], pv3.val);
+                                    
             if (DISP_ParmSel == i) strcat(slines[2+i]," <-");
   
           } 
@@ -325,8 +349,18 @@ void saveRoute()
 {  
     uint8_t src_id = dialBuffer[1] * 10 + dialBuffer[2];
     uint16_t* GLB_BMT = dialBuffer[0] == CABLE ? &GLB_BMT_Cable : &GLB_BMT_Jack;
-   
+
+    Serial.println(*GLB_BMT,BIN);
+    Serial.println(src_id,DEC);
+    
     *GLB_BMT ^= (1 << src_id);
+
+    Serial.println(*GLB_BMT,BIN);
+    
+    Serial.println("------------");
+    Serial.println("1 << src_id");
+    Serial.println(1 << src_id,BIN);
+    Serial.println("------------");
 
     uint8_t numChannels = countSetBits(*GLB_BMT);
     uint8_t sz = numChannels + 10;
@@ -334,17 +368,32 @@ void saveRoute()
     uint8_t sysexConfig[9] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0]};
     uint8_t sysexEnd[1] = {0xF7};
     uint8_t sysex[sz];
-  
-    memcpy(sysex,sysexConfig,9*sizeof(uint8_t));
-    memcpy(sysex+sz-1,sysexEnd,sizeof(uint8_t)); 
-    
-    for (uint8_t i=0;i<=15;i++){
-      if (*GLB_BMT & (1 << i)){
-        sysex[numChannel++] = i;
-      }
-    }
 
-    Serial3.write(sysex, sz);
+    if (*GLB_BMT){
+      memcpy(sysex,sysexConfig,9*sizeof(uint8_t));
+      memcpy(sysex+sz-1,sysexEnd,sizeof(uint8_t)); 
+      
+      for (uint8_t i=0;i<=15;i++){
+        if (*GLB_BMT & (1 << i)){
+          sysex[numChannel++] = i;
+        }
+      }
+  
+      Serial3.write(sysex, sz);
+      
+    } else {
+      
+      uint8_t sysexConfig2[10] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0], 0xF7};
+      Serial3.write(sysexConfig2, 10);
+
+      Serial.println("");
+      for (int i=0;i<10;i++) {
+        if (sysexConfig2[i]<10) Serial.print("0");
+        Serial.print(sysexConfig2[i],HEX);
+      }
+      Serial.println("");
+      
+    }
     
 }
 
@@ -479,20 +528,24 @@ void processIRKeypress(uint8_t inByte)
   
             case PLUS_100:   
               DISP_Mode = !DISP_Mode;
+              noUpdate = 1;
             break;
   
             case PURPLE_MINUS: 
               if (DISP_Cmd[DISP_Slot] > 0) DISP_Cmd[DISP_Slot]--; else DISP_Cmd[DISP_Slot] = 15;
+              noUpdate = 1;
             break;    
   
             case PURPLE_PLUS:               
               if (DISP_Cmd[DISP_Slot] < 0xD) DISP_Cmd[DISP_Slot]++; else DISP_Cmd[DISP_Slot] = 0;
+              noUpdate = 1;
             break;
   
           }
             
         } else if (DISP_Mode == SET){
 
+          noUpdate = 1;
           
           switch(inByte){
                  
@@ -513,11 +566,15 @@ void processIRKeypress(uint8_t inByte)
               break;
 
               case RED_CH_MINUS: 
-                  DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot] = !DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot];
+                  DISP_ParmVals[DISP_ParmSel][DISP_Slot] = DISP_ParmVals[DISP_ParmSel][DISP_Slot] - 10;
               break;    
-    
+
+              case RED_CH: 
+                  DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot] = !DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot];
+              break;  
+              
               case RED_CH_PLUS:               
-                  DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot] = DISP_ParmVals[DISP_ParmSel][DISP_Slot] + 10;
+                  DISP_ParmVals[DISP_ParmSel][DISP_Slot] = DISP_ParmVals[DISP_ParmSel][DISP_Slot] + 10;
               break;
               
               case PLUS_100:   
