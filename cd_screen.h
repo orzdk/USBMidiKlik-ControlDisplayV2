@@ -36,3 +36,13 @@ void renderScreenP(Adafruit_SSD1306* d, char lines[][20])
 }
 
 #endif
+
+/*
+      Serial.println("");
+      for (int i=0;i<10;i++) {
+        if (sysexConfig2[i]<10) Serial.print("0");
+        Serial.print(sysexConfig2[i],HEX);
+      }
+      Serial.println("");
+
+*/

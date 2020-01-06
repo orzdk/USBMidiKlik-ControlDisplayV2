@@ -29,5 +29,17 @@ uint8_t getdigit(uint8_t num, uint8_t n)
     return r;
 }
 
+/*
+uint8_t bufferHexCharToHex(uint8_t offset)
+{
+  char msbchar = dialBuffer[offset];
+  char lsbchar = dialBuffer[offset+1];
+
+  uint8_t msb = (msbchar & 15) +( msbchar >> 6) * 9;
+  uint8_t lsb = (lsbchar & 15) +( lsbchar >> 6) * 9;
+
+  return (msb << 4) | lsb;
+}
+*/
 
 #endif
