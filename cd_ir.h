@@ -132,46 +132,5 @@ uint8_t irTranslate(uint64_t val)
 
 }
 
-char irTranslateHexMode(uint8_t inByte)
-{
-
-    char outChar = 0;
-
-    switch(inByte){
-
-        case 0: case 1: case 2: case 3: case 4:
-        case 5: case 6: case 7: case 8: case 9:      
-          outChar = (char)inByte;
-        break;
-
-        case 13: // Blue prev
-              outChar = 'A';
-        break;
-           
-        case 14: // Blue next
-              outChar = 'B';
-        break;
-
-        case 15: // Green play/pause
-              outChar = 'C';
-        break;
-           
-        case 16: // Purple -
-              outChar = 'D';
-        break;    
-
-        case 17: // Purple +     
-              outChar = 'E';
-        break;
-           
-        case 18: // Purple EQ
-              outChar = 'F';
-        break;
-
-    }
-
-    return outChar;
-
-}
 
 #endif

@@ -1,5 +1,4 @@
 #include <IRremote.h>
-#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306_STM32.h>
 
 #include "cd_ir.h"
@@ -8,6 +7,9 @@
 #include "cd_l3m_c.h"
 
 #define RECV_PIN 8
+#define PARM_COUNT cCmd[DISP_Cmd[DISP_Slot]].parameterCount
+#define SELECTED_PARMVAL DISP_ParmVals[DISP_ParmSel][DISP_Slot]
+#define SELECTED_PARMVAL_SIGN DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot]
 
 Adafruit_SSD1306 display(-1);
 
@@ -16,16 +18,13 @@ decode_results results;
 
 enum cj { CABLE=0x0, JACK=0x1 };
 enum rf { ROUTE=0x1, FILTER=0x2, TRANSFORMER=0x3 };
-enum sc { MENU=0x0, ROUTES=0x1, TRANSFORMERS=0x2, MISC=0x3, SYSEX=0x4, MONITOR=0x5 };
+enum sc { MENU=0x0, ROUTES=0x1, TRANSFORMERS=0x2, MISC=0x3, MONITOR=0x4 };
 enum dm { VIEW=0x0, SET=0x1 };
 
-uint8_t numScreens = 6;
+uint8_t numScreens = 5;
 
 uint8_t dialBuffer[3];
 uint8_t dialBufferPos = 0;
-
-uint8_t dialHexBuffer[32];
-uint8_t dialHexBufferPos = 0;
 
 char slines[7][20] = {"","","","","","",""};
 uint8_t DISP_Cmd[2];
@@ -49,10 +48,11 @@ uint16_t GLB_BMT_Jack;
 uint8_t GLB_Filter = 0;
 
 uint8_t pendingConfigPackets = 0;
+
 uint8_t serialMessageBufferIDX = 0;
 uint8_t serialMessageBuffer[32];
 
-uint8_t messageInProgress;
+uint8_t justSaved = 0;
 
 struct PARMVAL{
   char val[3];
@@ -69,15 +69,13 @@ void resetRouteDialBuffer()
 void resetSerialBuffer()
 {
     serialMessageBufferIDX = 0;
-    messageInProgress = 0;
     memset(serialMessageBuffer, 0, sizeof(serialMessageBuffer));
 }
 
 /* Dump Requests */
 
-void requestPortRouteDump()
-{ 
-
+void requestRouteData()
+{  
   GLB_BMT_Cable = 0;
   GLB_BMT_Jack = 0;
   GLB_Filter = 0;
@@ -96,8 +94,9 @@ void requestPortRouteDump()
   Serial3.write(sysex_filterTargets, 11);delay(100);Serial3.flush();    
 }
 
-void requestPortTransformerDump()
+void requestTransformerData()
 {
+ 
   memset(DISP_ParmVals, 0, sizeof(DISP_ParmVals[0][0]) * 3 * 2);
   memset(DISP_ParmVals_Sign, 0, sizeof(DISP_ParmVals_Sign[0][0]) * 3 * 2);
   
@@ -107,13 +106,13 @@ void requestPortTransformerDump()
   pendingConfigPackets = 2;
    
   Serial3.write(sysex_transformers_slot0, 11);delay(100);Serial3.flush();  
-  Serial3.write(sysex_transformers_slot1, 11);delay(100);Serial3.flush();    
+  Serial3.write(sysex_transformers_slot1, 11);delay(100);Serial3.flush();  
 }
 
 /* Screen Handling */
 
-void updateScreen()
-{ 
+void render()
+{   
     memset(slines, 0, sizeof(slines[0][0]) * 20 * 7);
     
     char portbuffer[2];
@@ -132,25 +131,18 @@ void updateScreen()
     
     sprintf(dialvals_buffer[0], "%d", dialBuffer[0]);
     sprintf(dialvals_buffer[1], "%d", dialBuffer[1]);
-
-    Serial.println("DISP_ParmVals[0][DISP_Slot]");
-    Serial.println(DISP_ParmVals[0][DISP_Slot]);
     
-    sprintf(pv1.val, "%03i", DISP_ParmVals[0][DISP_Slot]);
-    sprintf(pv2.val, "%03i", DISP_ParmVals[1][DISP_Slot]);
-    sprintf(pv3.val, "%03i", DISP_ParmVals[2][DISP_Slot]);
+    sprintf(pv1.val, "%i", DISP_ParmVals[0][DISP_Slot]);
+    sprintf(pv2.val, "%i", DISP_ParmVals[1][DISP_Slot]);
+    sprintf(pv3.val, "%i", DISP_ParmVals[2][DISP_Slot]);
 
-    Serial.println("pv1");
-    Serial.println(pv1.val);
-    
     if (DISP_Screen == MENU){
       strcat(slines[0], "-- UMK --");
       strcat(slines[1], "> 1: Routes"); 
       strcat(slines[2], "> 2: Transformers"); 
       strcat(slines[3], "> 3: Options"); 
-      strcat(slines[4], "> 4: Sysex"); 
-      strcat(slines[5], "> 5: Monitor"); 
-      strcat(slines[6], "1-5, EQ >>");   
+      strcat(slines[4], "> 4: Monitor"); 
+      strcat(slines[6], "1-4, EQ >>");   
   
     } 
     else if (DISP_Screen == ROUTES){
@@ -172,10 +164,11 @@ void updateScreen()
   
     } 
     else if (DISP_Screen == TRANSFORMERS){
-
-        uint8_t parmCount = cCmd[DISP_Cmd[DISP_Slot]].parameterCount;
-        
+       
         if (DISP_Mode == VIEW){
+
+          Serial.println("SS1");
+
           strcat(slines[0], "-- Transformers --");
           strcat(slines[1], DISP_CableOrJack == CABLE ? "CBL " : "JCK ");
           strcat(slines[1], portbuffer);     
@@ -183,28 +176,31 @@ void updateScreen()
           strcat(slines[1], slotbuffer);
           strcat(slines[1], " CMD ");
           strcat(slines[1], cmdbuffer);
-    
+
           strcat(slines[2],cCmd[DISP_Cmd[0]].commandTitle);
           if (DISP_Slot == 0 ) strcat(slines[2]," <-");
     
           strcat(slines[3],cCmd[DISP_Cmd[1]].commandTitle);
           if (DISP_Slot == 1 ) strcat(slines[3]," <-");
-    
-          if (parmCount > 0) {
+
+          if (PARM_COUNT > 0) {
             strcat(slines[4],pv1.val);
           }
-          
-          if (parmCount > 1) {
+  
+          if (PARM_COUNT > 1) {
             strcat(slines[4],",");
             strcat(slines[4],pv2.val);
           }
-          
-          if (parmCount > 2) {
+
+          if (PARM_COUNT > 2) {
             strcat(slines[4],",");
             strcat(slines[4],pv3.val);
           }
-         
-          strcat(slines[6], "CFG: [100+]");     
+
+          if (justSaved) strcat(slines[5],"Saved");
+          
+          strcat(slines[6], "C:[100+], S:[200+]");     
+          
              
         } 
         else if (DISP_Mode == SET){
@@ -212,7 +208,7 @@ void updateScreen()
           strcat(slines[0], cCmd[DISP_Cmd[DISP_Slot]].commandTitle);
           strcat(slines[6], "C: [100+], S: [200+]");
        
-          for (int i=0; i<parmCount; i++)
+          for (int i=0; i<PARM_COUNT; i++)
           {  
             strcat(slines[2+i], cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[i]);
             strcat(slines[2+i], ": ");
@@ -226,25 +222,22 @@ void updateScreen()
             if (DISP_ParmSel == i) strcat(slines[2+i]," <-");
   
           } 
-        }
-        
+         
+        }           
     }
     else if (DISP_Screen == MISC){
         strcat(slines[0], "-- Options --"); 
         strcat(slines[1], "1. 0F - RouteReset");
-        strcat(slines[3], "2. 0A - HW reset");
-        strcat(slines[4], "3. 08 - Serialmode");
+        strcat(slines[2], "2. 0A - HW reset");
+        strcat(slines[3], "3. 08 - Serialmode");
     } 
-    else if (DISP_Screen == SYSEX){
-        strcat(slines[0], "-- Sysex --");
-        strcat(slines[1], "Not implemented");
-    }   
     else if (DISP_Screen == MONITOR){
         strcat(slines[0], "-- Monitor --");
         strcat(slines[1], "Not implemented");
     }  
-    
+
     renderScreenP(&display, slines);
+    
 }
 
 /* Proces Incoming - */
@@ -314,8 +307,9 @@ void processSerialBuffer()
       DISP_ParmVals[3][RCV_Target] = serialMessageBuffer[13];
 
     }      
-    
+
     resetSerialBuffer(); 
+    
 }
 
 /* Input Handling */
@@ -326,8 +320,6 @@ void saveFilter(uint8_t filterBit)
     uint8_t sysexConfig[10] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x2, DISP_CableOrJack, DISP_Port, GLB_Filter, 0xF7};
 
     Serial3.write(sysexConfig,10);  
-
-    delay(500);
 }
 
 void saveRoute()
@@ -358,12 +350,11 @@ void saveRoute()
       
     } else {
       
-      uint8_t sysexConfig2[10] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0], 0xF7};
-      Serial3.write(sysexConfig2, 10);
+      uint8_t sysexConfigNone[10] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0], 0xF7};
+      Serial3.write(sysexConfigNone, 10);
      
     }
 
-    delay(500);
 }
 
 void saveTransformer()
@@ -381,240 +372,245 @@ void saveTransformer()
 
   Serial3.write(sysex, 16);
 
-  delay(500);
+}
+
+void KEYS_Menu(uint8_t inByte){
+    if (inByte > 0 && inByte < 4) {
+      DISP_Screen = inByte;
+    }
+}
+
+void KEYS_Routes(uint8_t inByte){
+
+    uint8_t noRequest = 0;
+    
+    switch(inByte){
+
+        case 0: case 1: case 2: case 3: case 4:
+        case 5: case 6: case 7: case 8: case 9:
+          
+          if (dialBufferPos < 2 && inByte > 1) break;
+          
+          dialBuffer[dialBufferPos++] = inByte;
+          
+          if(dialBufferPos == 3){
+            saveRoute();
+            resetRouteDialBuffer();  
+          } else noRequest = 1;
+          
+        break;
+
+        case GREEN_PLAY:
+        break;
+          
+        case RED_CH_MINUS:
+          if (DISP_Port > 0) DISP_Port--; else DISP_Port = 15;
+        break;    
+        
+        case RED_CH:
+          DISP_CableOrJack = !DISP_CableOrJack;
+        break;
+        
+        case RED_CH_PLUS:    
+          if (DISP_Port < 15) DISP_Port++; else DISP_Port = 0;
+        break;
+
+        case BLUE_PREV: 
+          saveFilter(0);
+        break;    
+
+        case BLUE_NEXT:     
+          saveFilter(1);
+        break;
+
+        case PURPLE_MINUS: 
+          saveFilter(2);
+        break;    
+
+        case PURPLE_PLUS:     
+          saveFilter(3); 
+        break;
+
+    }
+    
+    render();
+    if (!noRequest) requestRouteData();
+    
+}
+
+void KEYS_Transformers_View(uint8_t inByte){
+
+    uint8_t noRequest = 0;
+   
+    switch(inByte){
+
+        case GREEN_PLAY:
+        break;
+        
+        case RED_CH_MINUS:
+          if (DISP_Port > 0) DISP_Port--;
+        break;    
+        
+        case RED_CH:
+          DISP_CableOrJack = !DISP_CableOrJack;
+        break;
+        
+        case RED_CH_PLUS:    
+          if (DISP_Port < 15) DISP_Port++;
+        break;
+
+        case BLUE_PREV: 
+          DISP_Slot = !DISP_Slot;
+        break;    
+
+        case BLUE_NEXT:     
+          DISP_Slot = !DISP_Slot;
+        break;
+
+        case PLUS_200:   
+          saveTransformer();
+          justSaved = 1;                       
+        break;
+
+        case PLUS_100:   
+          DISP_Mode = !DISP_Mode;
+          noRequest = 1;
+        break;
+
+        case PURPLE_MINUS: 
+          if (DISP_Cmd[DISP_Slot] > 0) DISP_Cmd[DISP_Slot]--; else DISP_Cmd[DISP_Slot] = 15;
+          for (int i=0;i<3;i++) DISP_ParmVals[i][DISP_Slot] = 0;
+          noRequest = 1;
+        break;    
+
+        case PURPLE_PLUS:               
+          if (DISP_Cmd[DISP_Slot] < 0xD) DISP_Cmd[DISP_Slot]++; else DISP_Cmd[DISP_Slot] = 0;
+          for (int i=0;i<3;i++) DISP_ParmVals[i][DISP_Slot] = 0;
+          noRequest = 1;
+        break;
+
+    }
+    
+    render();
+    if (!noRequest) requestTransformerData(); 
+}
+
+void KEYS_Transformers_Set(uint8_t inByte){
+
+    switch(inByte){
+           
+        case BLUE_PREV: 
+           if (DISP_ParmSel > 0) DISP_ParmSel--; 
+        break;    
+
+        case BLUE_NEXT:     
+           if (DISP_ParmSel < PARM_COUNT - 1) DISP_ParmSel++; 
+        break;
+
+        case PURPLE_MINUS: 
+           if (SELECTED_PARMVAL > 0) SELECTED_PARMVAL--;
+        break;    
+
+        case PURPLE_PLUS:      
+           if (SELECTED_PARMVAL < 127) SELECTED_PARMVAL++;
+        break;
+
+        case RED_CH_MINUS: 
+           if (SELECTED_PARMVAL >= 10) SELECTED_PARMVAL = SELECTED_PARMVAL - 10;
+        break;    
+
+        case RED_CH: 
+           SELECTED_PARMVAL_SIGN = !SELECTED_PARMVAL_SIGN;
+        break;  
+        
+        case RED_CH_PLUS:               
+           if (SELECTED_PARMVAL <= 117) SELECTED_PARMVAL = SELECTED_PARMVAL + 10;
+        break;
+        
+        case PLUS_100:   
+          DISP_Mode = !DISP_Mode;
+        break;
+
+    }
+
+    render();
+}
+
+void KEYS_Misc(uint8_t inByte){
+
+  switch(inByte){
+    case 1: 
+      Serial3.write(sysex_route_reset, 7);
+      break; 
+    case 2: 
+      Serial3.write(sysex_hw_reset, 6);
+      break; 
+    case 3:          
+      Serial3.write(sysex_serial_boot, 6);
+      break; 
+  }
 }
 
 /* Main  */
 
 void processIRKeypress(uint8_t inByte)
-{   
-    uint8_t noUpdate = 0;
-    uint8_t serialRequested = 0;
+{     
+  justSaved = 0;
+  
+  if (inByte == PURPLE_EQ) {  
       
-    if (inByte == PURPLE_EQ) {
-
-      resetRouteDialBuffer(); 
-      
-      if (DISP_Screen == numScreens-1){
-          DISP_Screen = 0;
-      }
-        else{
-         DISP_Screen++;
-      }  
-
+    if (DISP_Screen == numScreens-1){
+        DISP_Screen = 0;
     }
-    else {
-
-      if (DISP_Screen == MENU){
-        if (inByte > 0 && inByte < 4) DISP_Screen = inByte;
-      } 
-      else if (DISP_Screen == ROUTES){
-
-        switch(inByte){
-
-          case 0: case 1: case 2: case 3: case 4:
-          case 5: case 6: case 7: case 8: case 9:
-            
-            if (dialBufferPos < 2 && inByte > 1) break;
-            
-            dialBuffer[dialBufferPos++] = inByte;
-           
-            if(dialBufferPos == 3) {
-              saveRoute();
-              resetRouteDialBuffer();
-            } else {
-              noUpdate = 1;
-            }
-            
-          break;
-
-          case GREEN_PLAY:
-          break;
-            
-          case RED_CH_MINUS:
-            if (DISP_Port > 0) DISP_Port--;
-          break;    
-          
-          case RED_CH:
-            DISP_CableOrJack = !DISP_CableOrJack;
-          break;
-          
-          case RED_CH_PLUS:    
-            if (DISP_Port < 15) DISP_Port++;
-          break;
-
-          case BLUE_PREV: 
-              saveFilter(0);
-          break;    
-  
-          case BLUE_NEXT:     
-              saveFilter(1);
-          break;
-
-          case PURPLE_MINUS: 
-             saveFilter(2);
-          break;    
-
-          case PURPLE_PLUS:     
-             saveFilter(3);
-          break;
-
-        }
-
-        if (!noUpdate) {
-          requestPortRouteDump();
-          serialRequested = 1;
-        }
-        
-      }
-      else if (DISP_Screen == TRANSFORMERS){
-
-        uint8_t parmCount = cCmd[DISP_Cmd[DISP_Slot]].parameterCount;
-         
-        if (DISP_Mode == VIEW){     
-             
-          switch(inByte){
-
-            case GREEN_PLAY:
-            break;
-          
-            case RED_CH_MINUS:
-              if (DISP_Port > 0) DISP_Port--;
-            break;    
-            
-            case RED_CH:
-              DISP_CableOrJack = !DISP_CableOrJack;
-            break;
-            
-            case RED_CH_PLUS:    
-              if (DISP_Port < 15) DISP_Port++;
-            break;
-  
-            case BLUE_PREV: 
-              DISP_Slot = !DISP_Slot;
-            break;    
-  
-            case BLUE_NEXT:     
-              DISP_Slot = !DISP_Slot;
-            break;
-  
-            case PLUS_100:   
-              DISP_Mode = !DISP_Mode;
-              noUpdate = 1;
-            break;
-  
-            case PURPLE_MINUS: 
-              if (DISP_Cmd[DISP_Slot] > 0) DISP_Cmd[DISP_Slot]--; else DISP_Cmd[DISP_Slot] = 15;
-              noUpdate = 1;
-            break;    
-  
-            case PURPLE_PLUS:               
-              if (DISP_Cmd[DISP_Slot] < 0xD) DISP_Cmd[DISP_Slot]++; else DISP_Cmd[DISP_Slot] = 0;
-              noUpdate = 1;
-            break;
-  
-          }
-
-          if (!noUpdate) {
-            requestPortTransformerDump();
-            serialRequested = 1;
-          }
-            
-        } else if (DISP_Mode == SET){
-
-       
-          switch(inByte){
-                 
-              case BLUE_PREV: 
-                if (DISP_ParmSel > 0) DISP_ParmSel--; 
-              break;    
+      else{
+       DISP_Screen++;
+    }  
     
-              case BLUE_NEXT:     
-                if (DISP_ParmSel < parmCount-1) DISP_ParmSel++; 
-              break;
-  
-              case PURPLE_MINUS: 
-                  if (DISP_ParmVals[DISP_ParmSel][DISP_Slot] > 0) DISP_ParmVals[DISP_ParmSel][DISP_Slot]--;
-              break;    
+    resetRouteDialBuffer(); 
+    render();
     
-              case PURPLE_PLUS:      
-                if (DISP_ParmVals[DISP_ParmSel][DISP_Slot] < 127) DISP_ParmVals[DISP_ParmSel][DISP_Slot]++;
-              break;
+    if (DISP_Screen == ROUTES) requestRouteData();
+    if (DISP_Screen == TRANSFORMERS) requestTransformerData();
+  }
+  else {
 
-              case RED_CH_MINUS: 
-                  DISP_ParmVals[DISP_ParmSel][DISP_Slot] = DISP_ParmVals[DISP_ParmSel][DISP_Slot] - 10;
-              break;    
-
-              case RED_CH: 
-                  DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot] = !DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot];
-              break;  
-              
-              case RED_CH_PLUS:               
-                  DISP_ParmVals[DISP_ParmSel][DISP_Slot] = DISP_ParmVals[DISP_ParmSel][DISP_Slot] + 10;
-              break;
-              
-              case PLUS_100:   
-                DISP_Mode = !DISP_Mode;
-                if (DISP_Mode == SET) DISP_ParmSel = 0;
-              break;
-
-              case PLUS_200:   
-                saveTransformer();
-                DISP_Mode = !DISP_Mode;                             
-                requestPortTransformerDump();
-                serialRequested = 1;
-              break;
-          }
-
-          
-        }
-        
+    if (DISP_Screen == MENU){
+      KEYS_Menu(inByte);
+    } 
+    else if (DISP_Screen == ROUTES){
+      KEYS_Routes(inByte);   
+    }
+    else if (DISP_Screen == TRANSFORMERS){
+      if (DISP_Mode == VIEW){           
+          KEYS_Transformers_View(inByte);
+      } else if (DISP_Mode == SET){
+          KEYS_Transformers_Set(inByte);
       }
-      else if (DISP_Screen == SYSEX){
-      
-      }
-      else if (DISP_Screen == MISC){
-
-        uint8_t sysex1[7] = {0xF0,0x77,0x77,0x78,0x0F,0x00,0xF7}; // 1. 0F - RouteReset
-        uint8_t sysex2[6] = {0xF0,0x77,0x77,0x78,0x0A,0xF7};      // 3. 0A - HW reset
-        uint8_t sysex3[6] = {0xF0,0x77,0x77,0x78,0x08,0xF7};      // 4. 08 - Serialmode
-        
-        switch(inByte){
-          case 1: 
-            Serial3.write(sysex1, 7);
-            break; 
-          case 2: 
-            Serial3.write(sysex2, 6);
-            break; 
-          case 3:          
-            Serial3.write(sysex3, 6);
-            break; 
-        }
-        
-      }
-
+    }
+    else if (DISP_Screen == MISC){
+      KEYS_Misc(inByte);  
     }
 
-    if (!serialRequested) updateScreen();
+  }  
 }
 
 void processSerialData(uint8_t dataByte) 
 {     
-   if (dataByte == 0xF7 && messageInProgress ) {
+   if (dataByte == 0xF7 && serialMessageBufferIDX ) {
       
      serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
      processSerialBuffer();
+     resetSerialBuffer();
 
      if (--pendingConfigPackets == 0){
-        updateScreen();
+        render();
      }
 
    }
    else if (dataByte == 0xF0) {
      serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-     messageInProgress = 1;
    }
-   else if ( messageInProgress ){
+   else if ( serialMessageBufferIDX ){
      serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
    }
 }
@@ -631,6 +627,7 @@ void loop()
     char inByte = Serial3.read();
     processSerialData(inByte);
   }
+
 }
 
 void setup()
@@ -644,5 +641,5 @@ void setup()
   
   irrecv.enableIRIn();
   
-  updateScreen();
+  render();
 }
