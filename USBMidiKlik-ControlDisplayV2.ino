@@ -204,10 +204,14 @@ void render()
              
         } 
         else if (DISP_Mode == SET){
-          
+          uint8_t dp = DISP_Port;
+          Serial.println(dp);
+
           strcat(slines[0], cCmd[DISP_Cmd[DISP_Slot]].commandTitle);
           strcat(slines[6], "C: [100+], S: [200+]");
        
+          DISP_Port = dp;
+          
           for (int i=0; i<PARM_COUNT; i++)
           {  
             strcat(slines[2+i], cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[i]);
