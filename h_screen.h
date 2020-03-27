@@ -1,5 +1,5 @@
-#ifndef _CD_SCREEN_H_
-#define _CD_SCREEN_H_
+#ifndef _H_SCREEN_H_
+#define _H_SCREEN_H_
 #pragma once
 
 void renderScreenP(Adafruit_SSD1306* d, char lines[][20])

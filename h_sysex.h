@@ -1,5 +1,5 @@
-#ifndef _SYSEX_H_
-#define _SYSEX_H_
+#ifndef _H_SYSEX_H_
+#define _H_SYSEX_H_
 #pragma once 
 
 uint8_t sysex_route_reset[7] = {0xF0,0x77,0x77,0x78,0x0F,0x00,0xF7}; // 1. 0F - RouteReset

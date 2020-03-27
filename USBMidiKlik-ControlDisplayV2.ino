@@ -23,23 +23,21 @@ enum sc { MENU=0x0, ROUTES=0x1, TRANSFORMERS=0x2, MISC=0x3, MONITOR=0x4 };
 
 uint8_t numScreens = 5;
 
-uint8_t dialBuffer[3];
-uint8_t dialBufferPos = 0;
-
 char slines[7][20] = {"","","","","","",""};
+
 uint8_t DISP_Cmd[2];
 uint8_t DISP_ParmVals[4][1];
 uint8_t DISP_ParmVals_Sign[3][2];
 
-char filter[5];
+uint8_t DISP_Screen = MENU;
+uint8_t DISP_CableOrJack = CABLE;
+uint8_t DISP_Mode = VIEW;
 
-uint8_t DISP_Screen = 0;
-uint8_t DISP_CableOrJack = 0;
 uint8_t DISP_Port = 0;
 uint8_t DISP_Slot = 0;
-uint8_t DISP_Mode = 0;
 uint8_t DISP_ParmSel = 0;
 
+char filter[5];
 char DISP_CableTargets[20] = "";
 char DISP_JackTargets[20] = "";
 
@@ -47,22 +45,22 @@ uint16_t GLB_BMT_Cable;
 uint16_t GLB_BMT_Jack;
 uint8_t GLB_Filter = 0;
 
-uint8_t pendingConfigPackets = 0;
+uint8_t dialBufferidx = 0;
+uint8_t dialBuffer[3];
 
 uint8_t serialMessageBufferIDX = 0;
 uint8_t serialMessageBuffer[32];
 
 uint8_t justSaved = 0;
+uint8_t pendingConfigPackets = 0;
 
-struct PARMVAL{
-  char val[3];
-};
+struct PARMVAL{ char val[3]; };
 
 /* Dial buffer stuff */
 
 void resetRouteDialBuffer()
 {
-  dialBufferPos = 0;
+  dialBufferidx = 0;
   memset(dialBuffer, 0, sizeof(dialBuffer));
 }
 
@@ -120,14 +118,13 @@ void render()
     char portbuffer[2];
     char slotbuffer[2];
     char cmdbuffer[2];
-    
     char dialvals_buffer[2][2] = {0,0};
 
     PARMVAL pv[3];
       
     sprintf(portbuffer, "%d", DISP_Port);
-    sprintf(slotbuffer,"%d", DISP_Slot);
-    sprintf(cmdbuffer, "%d", DISP_Cmd[DISP_Slot]);
+    sprintf(slotbuffer, "%d", DISP_Slot);
+    sprintf(cmdbuffer,  "%d", DISP_Cmd[DISP_Slot]);
     
     sprintf(dialvals_buffer[0], "%d", dialBuffer[0]);
     sprintf(dialvals_buffer[1], "%d", dialBuffer[1]);
@@ -158,10 +155,10 @@ void render()
       strcat(slines[4], "J: ");
       strcat(slines[4], DISP_JackTargets);
 
-      if (dialBufferPos == 0) strcat(slines[6], "[0-9]");
-      if (dialBufferPos > 0) strcat(slines[6], dialBuffer[0] == CABLE ? "CABLE " : "JACK ");  
-      if (dialBufferPos > 1) strcat(slines[6], dialvals_buffer[1]);  
-      if (dialBufferPos > 2) strcat(slines[6], dialvals_buffer[2]);  
+      if (dialBufferidx == 0) strcat(slines[6], "[0-9]");
+      if (dialBufferidx > 0) strcat(slines[6], dialBuffer[0] == CABLE ? "CABLE " : "JACK ");  
+      if (dialBufferidx > 1) strcat(slines[6], dialvals_buffer[1]);  
+      if (dialBufferidx > 2) strcat(slines[6], dialvals_buffer[2]);  
       
     } 
     else if (DISP_Screen == TRANSFORMERS){
@@ -229,8 +226,7 @@ void render()
         strcat(slines[1], "Not implemented");
     }  
 
-    renderScreenP(&display, slines);
-    
+    renderScreenP(&display, slines);   
 }
 
 /* Proces Incoming - */
@@ -298,11 +294,10 @@ void processSerialBuffer()
 
     }      
 
-    resetSerialBuffer(); 
-    
+    resetSerialBuffer();     
 }
 
-/* Input Handling */
+/* Save Functions */
 
 void saveFilter(uint8_t filterBit)
 {  
@@ -344,7 +339,6 @@ void saveRoute()
       Serial3.write(sysexConfigNone, 10);
      
     }
-
 }
 
 void saveTransformer()
@@ -361,8 +355,9 @@ void saveTransformer()
   };
 
   Serial3.write(sysex, 16);
-
 }
+
+/* Input Handling */
 
 void KEYS_Menu(uint8_t inByte){
     if (inByte > 0 && inByte < 4) {
@@ -379,11 +374,11 @@ void KEYS_Routes(uint8_t inByte){
         case 0: case 1: case 2: case 3: case 4:
         case 5: case 6: case 7: case 8: case 9:
           
-          if (dialBufferPos < 2 && inByte > 1) break;
+          if (dialBufferidx < 2 && inByte > 1) break;
           
-          dialBuffer[dialBufferPos++] = inByte;
+          dialBuffer[dialBufferidx++] = inByte;
           
-          if(dialBufferPos == 3){
+          if(dialBufferidx == 3){
             saveRoute();
             resetRouteDialBuffer();  
           } else noRequest = 1;
@@ -424,8 +419,7 @@ void KEYS_Routes(uint8_t inByte){
     }
     
     render();
-    if (!noRequest) requestRouteData();
-    
+    if (!noRequest) requestRouteData(); 
 }
 
 void KEYS_Transformers_View(uint8_t inByte){
@@ -494,7 +488,6 @@ void KEYS_Transformers_Set(uint8_t inByte){
         break;    
 
         case BLUE_NEXT:     
-           //eif (DISP_ParmSel < PARM_COUNT - 1) DISP_ParmSel++; 
            if (cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[DISP_ParmSel+1]) DISP_ParmSel++;
         break;
 
@@ -618,7 +611,6 @@ void loop()
     char inByte = Serial3.read();
     processSerialData(inByte);
   }
-
 }
 
 void setup()

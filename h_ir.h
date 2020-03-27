@@ -1,5 +1,5 @@
-#ifndef _CD_IR_H_
-#define _CD_IR_H_
+#ifndef _H_IR_H_
+#define _H_IR_H_
 #pragma once
 
 #define RED_CH_MINUS  10

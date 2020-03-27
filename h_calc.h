@@ -1,5 +1,5 @@
-#ifndef _CD_CALC_H_
-#define _CD_CALC_H_
+#ifndef _H_CALC_H_
+#define _H_CALC_H_
 #pragma once
 
 uint8_t countSetBits(uint16_t n) 
