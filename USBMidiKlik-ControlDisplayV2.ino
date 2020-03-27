@@ -1,13 +1,13 @@
 #include <IRremote.h>
 #include <Adafruit_SSD1306_STM32.h>
+#include <l3m_c.h>
 
-#include "cd_ir.h"
-#include "cd_calc.h"
-#include "cd_screen.h"
-#include "cd_l3m_c.h"
+#include "h_ir.h"
+#include "h_calc.h"
+#include "h_screen.h"
+#include "h_sysex.h"
 
 #define RECV_PIN 8
-#define PARM_COUNT cCmd[DISP_Cmd[DISP_Slot]].parameterCount
 #define SELECTED_PARMVAL DISP_ParmVals[DISP_ParmSel][DISP_Slot]
 #define SELECTED_PARMVAL_SIGN DISP_ParmVals_Sign[DISP_ParmSel][DISP_Slot]
 
@@ -18,8 +18,8 @@ decode_results results;
 
 enum cj { CABLE=0x0, JACK=0x1 };
 enum rf { ROUTE=0x1, FILTER=0x2, TRANSFORMER=0x3 };
-enum sc { MENU=0x0, ROUTES=0x1, TRANSFORMERS=0x2, MISC=0x3, MONITOR=0x4 };
 enum dm { VIEW=0x0, SET=0x1 };
+enum sc { MENU=0x0, ROUTES=0x1, TRANSFORMERS=0x2, MISC=0x3, MONITOR=0x4 };
 
 uint8_t numScreens = 5;
 
@@ -113,6 +113,8 @@ void requestTransformerData()
 
 void render()
 {   
+    uint8_t i=0;
+
     memset(slines, 0, sizeof(slines[0][0]) * 20 * 7);
     
     char portbuffer[2];
@@ -121,9 +123,7 @@ void render()
     
     char dialvals_buffer[2][2] = {0,0};
 
-    PARMVAL pv1;
-    PARMVAL pv2;
-    PARMVAL pv3;
+    PARMVAL pv[3];
       
     sprintf(portbuffer, "%d", DISP_Port);
     sprintf(slotbuffer,"%d", DISP_Slot);
@@ -131,22 +131,23 @@ void render()
     
     sprintf(dialvals_buffer[0], "%d", dialBuffer[0]);
     sprintf(dialvals_buffer[1], "%d", dialBuffer[1]);
-    
-    sprintf(pv1.val, "%i", DISP_ParmVals[0][DISP_Slot]);
-    sprintf(pv2.val, "%i", DISP_ParmVals[1][DISP_Slot]);
-    sprintf(pv3.val, "%i", DISP_ParmVals[2][DISP_Slot]);
+
+    sprintf(pv[0].val, "%i", DISP_ParmVals[0][DISP_Slot]);
+    sprintf(pv[1].val, "%i", DISP_ParmVals[1][DISP_Slot]);
+    sprintf(pv[2].val, "%i", DISP_ParmVals[2][DISP_Slot]);
 
     if (DISP_Screen == MENU){
+      
       strcat(slines[0], "-- UMK --");
       strcat(slines[1], "> 1: Routes"); 
       strcat(slines[2], "> 2: Transformers"); 
       strcat(slines[3], "> 3: Options"); 
       strcat(slines[4], "> 4: Monitor"); 
-      strcat(slines[6], "1-4, EQ >>");   
-  
+      strcat(slines[6], "1-4, EQ >>");  
+       
     } 
     else if (DISP_Screen == ROUTES){
-    
+      
       strcat(slines[0], "-- Routes --");
       strcat(slines[1], DISP_CableOrJack == CABLE ? "CABLE " : "JACK "); 
       strcat(slines[1], portbuffer);
@@ -161,13 +162,11 @@ void render()
       if (dialBufferPos > 0) strcat(slines[6], dialBuffer[0] == CABLE ? "CABLE " : "JACK ");  
       if (dialBufferPos > 1) strcat(slines[6], dialvals_buffer[1]);  
       if (dialBufferPos > 2) strcat(slines[6], dialvals_buffer[2]);  
-  
+      
     } 
     else if (DISP_Screen == TRANSFORMERS){
        
         if (DISP_Mode == VIEW){
-
-          Serial.println("SS1");
 
           strcat(slines[0], "-- Transformers --");
           strcat(slines[1], DISP_CableOrJack == CABLE ? "CBL " : "JCK ");
@@ -183,18 +182,10 @@ void render()
           strcat(slines[3],cCmd[DISP_Cmd[1]].commandTitle);
           if (DISP_Slot == 1 ) strcat(slines[3]," <-");
 
-          if (PARM_COUNT > 0) {
-            strcat(slines[4],pv1.val);
-          }
-  
-          if (PARM_COUNT > 1) {
-            strcat(slines[4],",");
-            strcat(slines[4],pv2.val);
-          }
-
-          if (PARM_COUNT > 2) {
-            strcat(slines[4],",");
-            strcat(slines[4],pv3.val);
+          while ( cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[i]){
+            if (i>0) strcat(slines[4]," ");
+            strcat(slines[4], pv[i].val);
+            i++;
           }
 
           if (justSaved) strcat(slines[5],"Saved");
@@ -204,27 +195,25 @@ void render()
              
         } 
         else if (DISP_Mode == SET){
-          uint8_t dp = DISP_Port;
-          Serial.println(dp);
 
           strcat(slines[0], cCmd[DISP_Cmd[DISP_Slot]].commandTitle);
-          strcat(slines[6], "C: [100+], S: [200+]");
+          strcat(slines[6], "C: [100+]");
        
-          DISP_Port = dp;
-          
-          for (int i=0; i<PARM_COUNT; i++)
+          i=0;
+
+          while ( cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[i] )
           {  
             strcat(slines[2+i], cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[i]);
             strcat(slines[2+i], ": ");
            
             if ( DISP_ParmVals_Sign[i][DISP_Slot] ) strcat(slines[2+i],"-");
 
-            if (i==0) strcat(slines[2+i], pv1.val);
-            if (i==1) strcat(slines[2+i], pv2.val);
-            if (i==2) strcat(slines[2+i], pv3.val);
+            if (i==0) strcat(slines[2+i], pv[0].val);
+            if (i==1) strcat(slines[2+i], pv[1].val);
+            if (i==2) strcat(slines[2+i], pv[2].val);
                                     
             if (DISP_ParmSel == i) strcat(slines[2+i]," <-");
-  
+            i++;
           } 
          
         }           
@@ -249,10 +238,7 @@ void render()
 void processSerialBuffer()
 {
     uint8_t RCV_RouteOrFilter = serialMessageBuffer[5];
-    uint8_t RCV_CableOrJackSrc = serialMessageBuffer[6];
-    uint8_t RCV_Port = serialMessageBuffer[7];
     uint8_t RCV_Target = serialMessageBuffer[8];
-
     char targetsTxt[20] = "";
     uint8_t targetsTxtPos = 0; 
       
@@ -508,7 +494,8 @@ void KEYS_Transformers_Set(uint8_t inByte){
         break;    
 
         case BLUE_NEXT:     
-           if (DISP_ParmSel < PARM_COUNT - 1) DISP_ParmSel++; 
+           //eif (DISP_ParmSel < PARM_COUNT - 1) DISP_ParmSel++; 
+           if (cCmd[DISP_Cmd[DISP_Slot]].parameterTitles[DISP_ParmSel+1]) DISP_ParmSel++;
         break;
 
         case PURPLE_MINUS: 
