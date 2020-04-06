@@ -70,41 +70,26 @@ void resetSerialBuffer()
     memset(serialMessageBuffer, 0, sizeof(serialMessageBuffer));
 }
 
-/* Dump Requests */
+/* Dump Request */
 
-void requestRouteData()
-{  
+void requestData()
+{
+  
   GLB_BMT_Cable = 0;
   GLB_BMT_Jack = 0;
   GLB_Filter = 0;
 
   memset(DISP_CableTargets,0,sizeof(DISP_CableTargets));
   memset(DISP_JackTargets,0,sizeof(DISP_JackTargets));
-        
-  uint8_t sysex_cableTargets[11] =  { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x1, 0x1, DISP_CableOrJack, DISP_Port, 0x0, 0xF7 };
-  uint8_t sysex_jackTargets[11] =   { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x1, 0x1, DISP_CableOrJack, DISP_Port, 0x1, 0xF7 };
-  uint8_t sysex_filterTargets[11] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x1, 0x2, DISP_CableOrJack, DISP_Port, 0x0, 0xF7 };   
-  
-  pendingConfigPackets = 3;
- 
-  Serial3.write(sysex_cableTargets, 11); delay(100);Serial3.flush();
-  Serial3.write(sysex_jackTargets, 11);  delay(100);Serial3.flush();
-  Serial3.write(sysex_filterTargets, 11);delay(100);Serial3.flush();    
-}
 
-void requestTransformerData()
-{
- 
   memset(DISP_ParmVals, 0, sizeof(DISP_ParmVals[0][0]) * 3 * 2);
   memset(DISP_ParmVals_Sign, 0, sizeof(DISP_ParmVals_Sign[0][0]) * 3 * 2);
   
-  uint8_t sysex_transformers_slot0[11] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x1, 0x3, DISP_CableOrJack, DISP_Port, 0x0, 0xF7 }; 
-  uint8_t sysex_transformers_slot1[11] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x1, 0x3, DISP_CableOrJack, DISP_Port, 0x1, 0xF7 }; 
+  uint8_t sysex[6] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0xF7 }; 
 
-  pendingConfigPackets = 2;
-   
-  Serial3.write(sysex_transformers_slot0, 11);delay(100);Serial3.flush();  
-  Serial3.write(sysex_transformers_slot1, 11);delay(100);Serial3.flush();  
+  pendingConfigPackets = 5;
+
+  Serial3.write(sysex, 6);delay(100);Serial3.flush();  
 }
 
 /* Screen Handling */
@@ -233,12 +218,21 @@ void render()
 
 void processSerialBuffer()
 {
-    uint8_t RCV_RouteOrFilter = serialMessageBuffer[5];
+    uint8_t RCV_Function = serialMessageBuffer[4];
+    uint8_t RCV_SubFunction = serialMessageBuffer[5];
+    uint8_t RCV_CableOrJackSrc = serialMessageBuffer[6];
+    uint8_t RCV_Port = serialMessageBuffer[7];
     uint8_t RCV_Target = serialMessageBuffer[8];
+
     char targetsTxt[20] = "";
     uint8_t targetsTxtPos = 0; 
-      
-    if (RCV_RouteOrFilter == ROUTE) { 
+    
+    if ( RCV_Function != 0x0F ) return;   
+    if ( DISP_Screen == ROUTES && ( RCV_SubFunction != 0x01 && RCV_SubFunction != 0x02) ) return;
+    if ( DISP_Screen == TRANSFORMERS && RCV_SubFunction != 0x03 ) return;
+    if ( !(RCV_CableOrJackSrc == DISP_CableOrJack && RCV_Port == DISP_Port)) return;
+
+    if (RCV_SubFunction == ROUTE) { 
      
         uint8_t dtstrt = 9;
         uint16_t BMT = 0;
@@ -275,7 +269,7 @@ void processSerialBuffer()
         }
 
     }
-    else if (RCV_RouteOrFilter == FILTER) {  
+    else if (RCV_SubFunction == FILTER) {  
       
       for (int i=0;i<4;i++) {
         filter[i] = RCV_Target & (1 << i) ? 'X' : '-';
@@ -284,7 +278,7 @@ void processSerialBuffer()
       GLB_Filter = RCV_Target;
        
     }  
-    else if (RCV_RouteOrFilter == TRANSFORMER){
+    else if (RCV_SubFunction == TRANSFORMER){
    
       DISP_Cmd[RCV_Target] = serialMessageBuffer[9];
       DISP_ParmVals[0][RCV_Target] = serialMessageBuffer[10];
@@ -359,13 +353,15 @@ void saveTransformer()
 
 /* Input Handling */
 
-void KEYS_Menu(uint8_t inByte){
+void KEYS_Menu(uint8_t inByte)
+{
     if (inByte > 0 && inByte < 4) {
       DISP_Screen = inByte;
     }
 }
 
-void KEYS_Routes(uint8_t inByte){
+void KEYS_Routes(uint8_t inByte)
+{
 
     uint8_t noRequest = 0;
     
@@ -419,10 +415,11 @@ void KEYS_Routes(uint8_t inByte){
     }
     
     render();
-    if (!noRequest) requestRouteData(); 
+    if (!noRequest) requestData(); 
 }
 
-void KEYS_Transformers_View(uint8_t inByte){
+void KEYS_Transformers_View(uint8_t inByte)
+{
 
     uint8_t noRequest = 0;
    
@@ -476,10 +473,11 @@ void KEYS_Transformers_View(uint8_t inByte){
     }
     
     render();
-    if (!noRequest) requestTransformerData(); 
+    if (!noRequest) requestData(); 
 }
 
-void KEYS_Transformers_Set(uint8_t inByte){
+void KEYS_Transformers_Set(uint8_t inByte)
+{
 
     switch(inByte){
            
@@ -520,7 +518,8 @@ void KEYS_Transformers_Set(uint8_t inByte){
     render();
 }
 
-void KEYS_Misc(uint8_t inByte){
+void KEYS_Misc(uint8_t inByte)
+{
 
   switch(inByte){
     case 1: 
@@ -552,9 +551,8 @@ void processIRKeypress(uint8_t inByte)
     
     resetRouteDialBuffer(); 
     render();
-    
-    if (DISP_Screen == ROUTES) requestRouteData();
-    if (DISP_Screen == TRANSFORMERS) requestTransformerData();
+    requestData();
+
   }
   else {
 
