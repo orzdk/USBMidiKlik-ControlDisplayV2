@@ -85,7 +85,7 @@ void requestData()
   memset(DISP_ParmVals, 0, sizeof(DISP_ParmVals[0][0]) * 3 * 2);
   memset(DISP_ParmVals_Sign, 0, sizeof(DISP_ParmVals_Sign[0][0]) * 3 * 2);
   
-  uint8_t sysex[6] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0xF7 }; 
+  uint8_t sysex[6] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x7F, 0x0, 0x0, 0x0, 0xF7 }; 
 
   pendingConfigPackets = 5;
 
