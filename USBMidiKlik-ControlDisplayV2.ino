@@ -56,6 +56,9 @@ uint8_t pendingConfigPackets = 0;
 
 struct PARMVAL{ char val[3]; };
 
+uint8_t MIDIKLIK_VERSION = 20;
+uint8_t MIDIKLIK_L3M_TRANSFORMER = 0;
+
 /* Dial buffer stuff */
 
 void resetRouteDialBuffer()
@@ -81,15 +84,20 @@ void requestData()
 
   memset(DISP_CableTargets,0,sizeof(DISP_CableTargets));
   memset(DISP_JackTargets,0,sizeof(DISP_JackTargets));
-
   memset(DISP_ParmVals, 0, sizeof(DISP_ParmVals[0][0]) * 3 * 2);
   memset(DISP_ParmVals_Sign, 0, sizeof(DISP_ParmVals_Sign[0][0]) * 3 * 2);
   
-  uint8_t sysex[6] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x7F, 0x0, 0x0, 0x0, 0xF7 }; 
+  uint8_t sysex20[6] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0xF7 }; 
+  uint8_t sysex25[10] = { 0xF0, 0x77, 0x77, 0x78, 0x5, 0x7F, 0x0, 0x0, 0x0, 0xF7 }; 
 
-  pendingConfigPackets = 5;
+  pendingConfigPackets = MIDIKLIK_L3M_TRANSFORMER ? 5 : 3;
 
-  Serial3.write(sysex, 6);delay(100);Serial3.flush();  
+  if (MIDIKLIK_VERSION == 20){
+    Serial3.write(sysex20, 6);delay(100);Serial3.flush();
+  } else if (MIDIKLIK_VERSION == 25){
+    Serial3.write(sysex25, 10);delay(100);Serial3.flush();
+  }
+  
 }
 
 /* Screen Handling */
@@ -97,16 +105,18 @@ void requestData()
 void render()
 {   
     uint8_t i=0;
-
-    memset(slines, 0, sizeof(slines[0][0]) * 20 * 7);
     
     char portbuffer[2];
     char slotbuffer[2];
     char cmdbuffer[2];
+    char versionbuffer[2];
+    char mkl3mbuffer[1];
     char dialvals_buffer[2][2] = {0,0};
-
+    
     PARMVAL pv[3];
-      
+    
+    memset(slines, 0, sizeof(slines[0][0]) * 20 * 7);
+          
     sprintf(portbuffer, "%d", DISP_Port);
     sprintf(slotbuffer, "%d", DISP_Slot);
     sprintf(cmdbuffer,  "%d", DISP_Cmd[DISP_Slot]);
@@ -118,6 +128,9 @@ void render()
     sprintf(pv[1].val, "%i", DISP_ParmVals[1][DISP_Slot]);
     sprintf(pv[2].val, "%i", DISP_ParmVals[2][DISP_Slot]);
 
+    sprintf(versionbuffer, "%i", MIDIKLIK_VERSION);
+    sprintf(mkl3mbuffer, "%i", MIDIKLIK_L3M_TRANSFORMER);
+    
     if (DISP_Screen == MENU){
       
       strcat(slines[0], "-- UMK --");
@@ -173,7 +186,6 @@ void render()
           if (justSaved) strcat(slines[5],"Saved");
           
           strcat(slines[6], "C:[100+], S:[200+]");     
-          
              
         } 
         else if (DISP_Mode == SET){
@@ -205,6 +217,12 @@ void render()
         strcat(slines[1], "1. 0F - RouteReset");
         strcat(slines[2], "2. 0A - HW reset");
         strcat(slines[3], "3. 08 - Serialmode");
+        strcat(slines[4], "4. MK Version : ");
+        strcat(slines[4], versionbuffer);
+        strcat(slines[5], "4. l3m : ");
+        strcat(slines[5], mkl3mbuffer);
+        
+        
     } 
     else if (DISP_Screen == MONITOR){
         strcat(slines[0], "-- Monitor --");
@@ -218,9 +236,10 @@ void render()
 
 void processSerialBuffer()
 {
+    
     uint8_t RCV_Function = serialMessageBuffer[4];
     uint8_t RCV_SubFunction = serialMessageBuffer[5];
-    uint8_t RCV_CableOrJackSrc = serialMessageBuffer[6];
+    uint8_t RCV_CableOrJack = serialMessageBuffer[6];
     uint8_t RCV_Port = serialMessageBuffer[7];
     uint8_t RCV_Target = serialMessageBuffer[8];
 
@@ -230,10 +249,18 @@ void processSerialBuffer()
     if ( RCV_Function != 0x0F ) return;   
     if ( DISP_Screen == ROUTES && ( RCV_SubFunction != 0x01 && RCV_SubFunction != 0x02) ) return;
     if ( DISP_Screen == TRANSFORMERS && RCV_SubFunction != 0x03 ) return;
-    if ( !(RCV_CableOrJackSrc == DISP_CableOrJack && RCV_Port == DISP_Port)) return;
-
+    
+    if (RCV_SubFunction == ROUTE && RCV_CableOrJack == JACK && RCV_Port == 0x0F){
+      pendingConfigPackets = 0;
+      return;
+    }
+    
+    if (!(RCV_Port == DISP_Port && DISP_CableOrJack == RCV_CableOrJack)) return;
+    
     if (RCV_SubFunction == ROUTE) { 
-     
+
+        pendingConfigPackets--;
+
         uint8_t dtstrt = 9;
         uint16_t BMT = 0;
       
@@ -242,9 +269,7 @@ void processSerialBuffer()
         }
                 
         for(uint8_t i=0;i<16;i++){
-          
           if (BMT & (1 << i)){  
-           
             char dig1 = getdigit(i,0)+'0';
             char dig2 = getdigit(i,1)+'0'; 
     
@@ -256,21 +281,23 @@ void processSerialBuffer()
               targetsTxt[targetsTxtPos++] = dig1;
               targetsTxt[targetsTxtPos++] = ' ';
             }
-          }
-          
+          }     
         } 
    
         if (RCV_Target == CABLE){
-          GLB_BMT_Cable = BMT;
-          strncpy(DISP_CableTargets, targetsTxt, sizeof(DISP_CableTargets));  
-        } else if (RCV_Target == JACK){
-          GLB_BMT_Jack = BMT;
-          strncpy(DISP_JackTargets, targetsTxt, sizeof(DISP_JackTargets));
+           GLB_BMT_Cable = BMT;
+           strncpy(DISP_CableTargets, targetsTxt, sizeof(DISP_CableTargets));  
+        } else if (RCV_Target == JACK ){
+           GLB_BMT_Jack = BMT;
+           strncpy(DISP_JackTargets, targetsTxt, sizeof(DISP_JackTargets));
         }
+
 
     }
     else if (RCV_SubFunction == FILTER) {  
-      
+
+      pendingConfigPackets--;
+            
       for (int i=0;i<4;i++) {
         filter[i] = RCV_Target & (1 << i) ? 'X' : '-';
       }
@@ -285,7 +312,6 @@ void processSerialBuffer()
       DISP_ParmVals[1][RCV_Target] = serialMessageBuffer[11];
       DISP_ParmVals[2][RCV_Target] = serialMessageBuffer[12];
       DISP_ParmVals[3][RCV_Target] = serialMessageBuffer[13];
-
     }      
 
     resetSerialBuffer();     
@@ -362,7 +388,6 @@ void KEYS_Menu(uint8_t inByte)
 
 void KEYS_Routes(uint8_t inByte)
 {
-
     uint8_t noRequest = 0;
     
     switch(inByte){
@@ -414,8 +439,12 @@ void KEYS_Routes(uint8_t inByte)
 
     }
     
-    render();
-    if (!noRequest) requestData(); 
+    if (noRequest) {
+      render();
+    } else {
+       requestData(); 
+    }
+    
 }
 
 void KEYS_Transformers_View(uint8_t inByte)
@@ -472,8 +501,11 @@ void KEYS_Transformers_View(uint8_t inByte)
 
     }
     
-    render();
-    if (!noRequest) requestData(); 
+    if (noRequest) {
+      render();
+    } else {
+       requestData(); 
+    }
 }
 
 void KEYS_Transformers_Set(uint8_t inByte)
@@ -531,6 +563,16 @@ void KEYS_Misc(uint8_t inByte)
     case 3:          
       Serial3.write(sysex_serial_boot, 6);
       break; 
+    case 4:          
+      if (MIDIKLIK_VERSION == 20) MIDIKLIK_VERSION = 25;
+      else MIDIKLIK_VERSION = 20;
+      render();
+      break; 
+    case 5:          
+      if (MIDIKLIK_L3M_TRANSFORMER == 0) MIDIKLIK_L3M_TRANSFORMER = 1;
+      else MIDIKLIK_L3M_TRANSFORMER = 0;
+      render();
+      break; 
   }
 }
 
@@ -578,23 +620,27 @@ void processIRKeypress(uint8_t inByte)
 
 void processSerialData(uint8_t dataByte) 
 {     
-   if (dataByte == 0xF7 && serialMessageBufferIDX ) {
-      
-     serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-     processSerialBuffer();
-     resetSerialBuffer();
+   if (pendingConfigPackets > 0){
 
-     if (--pendingConfigPackets == 0){
-        render();
+     if (dataByte == 0xF7 && serialMessageBufferIDX > 0) {
+        
+       serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
+       processSerialBuffer();
+       resetSerialBuffer();
+
+     }
+     else if (dataByte == 0xF0) {
+       serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
+     }
+     else if ( serialMessageBufferIDX > 0){
+       serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
      }
 
-   }
-   else if (dataByte == 0xF0) {
-     serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-   }
-   else if ( serialMessageBufferIDX ){
-     serialMessageBuffer[serialMessageBufferIDX++] = dataByte;
-   }
+  }
+  else if (pendingConfigPackets == 0){
+      render();
+  } 
+
 }
 
 void loop()
