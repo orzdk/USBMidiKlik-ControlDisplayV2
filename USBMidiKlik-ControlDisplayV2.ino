@@ -245,16 +245,16 @@ void processSerialBuffer()
 
     char targetsTxt[20] = "";
     uint8_t targetsTxtPos = 0; 
-    
-    if ( RCV_Function != 0x0F ) return;   
-    if ( DISP_Screen == ROUTES && ( RCV_SubFunction != 0x01 && RCV_SubFunction != 0x02) ) return;
-    if ( DISP_Screen == TRANSFORMERS && RCV_SubFunction != 0x03 ) return;
-    
-    if (RCV_SubFunction == ROUTE && RCV_CableOrJack == JACK && RCV_Port == 0x0F){
+
+    if (RCV_Function == 0x6){ //ack
       pendingConfigPackets = 0;
       return;
     }
     
+    if ( RCV_Function != 0x0F ) return;   
+    if ( DISP_Screen == ROUTES && ( RCV_SubFunction != 0x01 && RCV_SubFunction != 0x02) ) return;
+    if ( DISP_Screen == TRANSFORMERS && RCV_SubFunction != 0x03 ) return;
+        
     if (!(RCV_Port == DISP_Port && DISP_CableOrJack == RCV_CableOrJack)) return;
     
     if (RCV_SubFunction == ROUTE) { 
@@ -331,17 +331,22 @@ void saveRoute()
 {  
     uint8_t src_id = dialBuffer[1] * 10 + dialBuffer[2];
     uint16_t* GLB_BMT = dialBuffer[0] == CABLE ? &GLB_BMT_Cable : &GLB_BMT_Jack;
+
+    Serial.println(*GLB_BMT,BIN);
     
     *GLB_BMT ^= (1 << src_id);
-
+    
+    Serial.println(*GLB_BMT,BIN);
+    
     uint8_t numChannels = countSetBits(*GLB_BMT);
     uint8_t sz = numChannels + 10;
     uint8_t numChannel = 9;
     uint8_t sysexConfig[9] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0]};
     uint8_t sysexEnd[1] = {0xF7};
     uint8_t sysex[sz];
-
+ 
     if (*GLB_BMT){
+      
       memcpy(sysex,sysexConfig,9*sizeof(uint8_t));
       memcpy(sysex+sz-1,sysexEnd,sizeof(uint8_t)); 
       
@@ -352,11 +357,17 @@ void saveRoute()
       }
   
       Serial3.write(sysex, sz);
+
+      for (uint8_t i=0;i<sizeof(sysex);i++){
+        if (sysex[i]<0x10) Serial.print("0");
+        Serial.print(sysex[i],HEX);Serial.print(" ");
+      }
+      Serial.println(" ");
       
     } else {
       
-      uint8_t sysexConfigNone[10] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0], 0xF7};
-      Serial3.write(sysexConfigNone, 10);
+      // uint8_t sysexConfigNone[10] = {0xF0, 0x77, 0x77, 0x78, 0x0F, 0x1, DISP_CableOrJack, DISP_Port, dialBuffer[0], 0xF7};
+      // Serial3.write(sysexConfigNone, 10);
      
     }
 }
